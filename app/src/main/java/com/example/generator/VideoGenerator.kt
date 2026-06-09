@@ -35,7 +35,13 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
-data class VerseData(val text: String, val translation: String?, val audioPath: String, val durationUs: Long)
+data class VerseData(
+    val text: String,
+    val translation: String?,
+    val audioPath: String,
+    val durationUs: Long,
+    val energyTimeline: List<Pair<Long, Float>>
+)
 
 class VideoGenerator {
 
@@ -102,14 +108,14 @@ class VideoGenerator {
             } catch (ex: Exception) {}
             
             if (pexelsApiKey.isNotBlank()) {
-                onProgress(if (isArabic) "جاري البحث عن مشاهد إسلامية سينمائية (Pexels)..." else "Searching for cinematic movie scenes (Pexels)...", 0.05f)
+                onProgress(if (isArabic) "جاري البحث عن مناظر طبيعية سينمائية خلابة (Pexels)..." else "Searching for breathtaking nature landscapes (Pexels)...", 0.05f)
                 try {
                     val pexelsQueries = listOf(
-                        "dark+aesthetic+space+particles",
-                        "luxury+glowing+dust+particles",
-                        "slow+particles+dark+abstract",
-                        "cosmic+nebula+stars+ambient",
-                        "dark+smoke+flowing+minimalist"
+                        "scenic+nature+landscape",
+                        "breathtaking+mountains+forest",
+                        "peaceful+nature+river+sunset",
+                        "calming+ocean+aerial+view",
+                        "majestic+waterfall+serene+clouds"
                     )
                     val chosenQuery = pexelsQueries.random()
                     val requestUrl = "https://api.pexels.com/videos/search?query=$chosenQuery&orientation=portrait&per_page=15"
@@ -174,14 +180,14 @@ class VideoGenerator {
             }
             
             if (!videoLoaded && pixabayApiKey.isNotBlank()) {
-                onProgress(if (isArabic) "جاري البحث عن مشاهد إسلامية سينمائية (Pixabay)..." else "Searching for cinematic movie scenes (Pixabay)...", 0.05f)
+                onProgress(if (isArabic) "جاري البحث عن مناظر طبيعية سينمائية هادئة (Pixabay)..." else "Searching for peaceful nature landscapes (Pixabay)...", 0.05f)
                 try {
                     val pixabayQueries = listOf(
-                        "dark+particles+cinematic",
-                        "starry+glowing+dust+ambient",
-                        "nebula+galaxy+dark",
-                        "space+dark+abstract+glowing",
-                        "smoke+slow+motion+dark"
+                        "scenic+nature+landscape",
+                        "breathtaking+mountains+forest",
+                        "peaceful+nature+river+sunset",
+                        "calming+ocean+aerial+view",
+                        "majestic+waterfall"
                     )
                     val chosenPixabayQuery = pixabayQueries.random()
                     val request = Request.Builder()
@@ -248,7 +254,7 @@ class VideoGenerator {
                 onProgress(if (isArabic) "جاري ترميز ملف الصوت بدقة سينمائية..." else "Encoding audio block dynamically...", 0.15f + (i * 0.4f / totalAyahs))
                 val aacFileName = "${reciterId}_${surah}_${ayah}_transcoded.m4a"
                 val aacFile = File(context.cacheDir, aacFileName)
-                transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
+                val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
                 
                 val ext = MediaExtractor().apply { setDataSource(aacFile.absolutePath) }
                 ext.selectTrack(0)
@@ -263,7 +269,7 @@ class VideoGenerator {
                     durationUs = maxTs
                 }
                 ext.release()
-                verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs))
+                verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs, timeline))
             }
             
             onProgress(if (isArabic) "جاري تهيئة معالجات المقطع..." else "Initializing video filters...", 0.5f)
@@ -413,6 +419,7 @@ class VideoGenerator {
                 val framesNeeded = Math.max(1, (verse.durationUs / frameDurationUs).toInt() + 1)
                 
                 for (i in 0 until framesNeeded) {
+                    checkCancellationAndPause()
                     if (threadError != null) {
                         throw Exception("خطأ في قنوات المعالجة الخلفية: ${threadError?.localizedMessage}")
                     }
@@ -432,8 +439,8 @@ class VideoGenerator {
                     }
                     
                     val frameIndex = videoPtsUs / frameDurationUs
-                    val chunkedText = getActiveTextChunk(verse.text, i, framesNeeded)
-                    val chunkedTranslation = getActiveTranslationChunk(verse.translation, verse.text, i, framesNeeded)
+                    val chunkedText = getActiveTextChunk(verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline)
+                    val chunkedTranslation = getActiveTranslationChunk(verse.translation, verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline)
                     
                     val bitmap = createVerseBitmap(
                         text = chunkedText,
@@ -622,7 +629,26 @@ class VideoGenerator {
         }
     }
 
-    private fun transcodeMp3ToAac(inputPath: String, outputPath: String) {
+    private fun checkCancellationAndPause() {
+        if (com.example.service.VideoGenerationService.isCancelled) {
+            throw kotlinx.coroutines.CancellationException("تم إلغاء عملية إنتاج الفيديو")
+        }
+        if (com.example.service.VideoGenerationService.isPaused) {
+            synchronized(com.example.service.VideoGenerationService.pauseLock) {
+                while (com.example.service.VideoGenerationService.isPaused && !com.example.service.VideoGenerationService.isCancelled) {
+                    try {
+                        com.example.service.VideoGenerationService.pauseLock.wait(100)
+                    } catch (e: Exception) {}
+                }
+            }
+            if (com.example.service.VideoGenerationService.isCancelled) {
+                throw kotlinx.coroutines.CancellationException("تم إلغاء عملية إنتاج الفيديو")
+            }
+        }
+    }
+
+    private fun transcodeMp3ToAac(inputPath: String, outputPath: String): List<Pair<Long, Float>> {
+        val rawEnergySamples = mutableListOf<Pair<Long, Float>>()
         val extractor = MediaExtractor().apply { setDataSource(inputPath) }
         if (extractor.trackCount == 0) {
             extractor.release()
@@ -664,6 +690,8 @@ class VideoGenerator {
         var muxerStarted = false
         
         while (!isEncoderEOS) {
+            checkCancellationAndPause()
+
             // A. Read from extractor and feed decoder
             if (!isExtractorEOS) {
                 val inIdx = decoder.dequeueInputBuffer(timeoutUs)
@@ -687,8 +715,30 @@ class VideoGenerator {
                     val buf = decoder.getOutputBuffer(outIdx)!!
                     val size = decoderBufferInfo.size
                     
+                    if (size > 0) {
+                        // Amplitude Energy Analysis for precise timing
+                        try {
+                            val bufferDuplicate = buf.duplicate()
+                            bufferDuplicate.position(decoderBufferInfo.offset)
+                            bufferDuplicate.limit(decoderBufferInfo.offset + size)
+                            
+                            var sumOfAbs = 0L
+                            var count = 0
+                            while (bufferDuplicate.remaining() >= 2) {
+                                val sample = bufferDuplicate.short
+                                sumOfAbs += Math.abs(sample.toInt())
+                                count++
+                            }
+                            val avgEnergy = if (count > 0) sumOfAbs.toFloat() / count else 0f
+                            rawEnergySamples.add(Pair(decoderBufferInfo.presentationTimeUs, avgEnergy))
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+
                     var encInIdx = -1
                     while (encInIdx < 0 && !isDecoderEOS) {
+                        checkCancellationAndPause()
                         encInIdx = encoder.dequeueInputBuffer(timeoutUs)
                         if (encInIdx < 0) {
                             // While waiting for an encoder input buffer, we should also drain the encoder output buffer to prevent a deadlock
@@ -764,9 +814,52 @@ class VideoGenerator {
         try { encoder.stop(); encoder.release() } catch (e: Exception) {}
         try { if (muxerStarted) muxer.stop(); muxer.release() } catch (e: Exception) {}
         try { extractor.release() } catch (e: Exception) {}
+
+        // Smooth energy with noise-gate threshold
+        val peak = rawEnergySamples.maxOfOrNull { it.second } ?: 1f
+        val gateThreshold = peak * 0.08f
+        return rawEnergySamples.map { (time, energy) ->
+            val gatedEnergy = if (energy > gateThreshold) energy - gateThreshold else 0f
+            Pair(time, gatedEnergy)
+        }
     }
 
-    private fun getActiveTextChunk(text: String, currentFrame: Int, totalFrames: Int): String {
+    private fun getCumulativeEnergyRatio(
+        currentFrame: Int,
+        totalFrames: Int,
+        durationUs: Long,
+        timeline: List<Pair<Long, Float>>
+    ): Float {
+        if (timeline.isEmpty() || totalFrames <= 1) {
+            return currentFrame.toFloat() / totalFrames.toFloat()
+        }
+        
+        val currentTimeUs = (currentFrame.toFloat() / totalFrames.toFloat()) * durationUs
+        
+        var totalEnergy = 0f
+        var cumulativeEnergy = 0f
+        
+        for (sample in timeline) {
+            totalEnergy += sample.second
+            if (sample.first <= currentTimeUs) {
+                cumulativeEnergy += sample.second
+            }
+        }
+        
+        return if (totalEnergy > 0f) {
+            cumulativeEnergy / totalEnergy
+        } else {
+            currentFrame.toFloat() / totalFrames.toFloat()
+        }
+    }
+
+    private fun getActiveTextChunk(
+        text: String, 
+        currentFrame: Int, 
+        totalFrames: Int,
+        durationUs: Long,
+        timeline: List<Pair<Long, Float>>
+    ): String {
         val words = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
         if (words.size <= 5) return text // Short verse, show complete text
         
@@ -782,18 +875,20 @@ class VideoGenerator {
         
         if (chunks.isEmpty()) return text
         
-        // Reciter finishes chanting original words roughly in the first 78% of the block
-        // Echo and breathing rest for the remaining 22%. Sync words precisely here.
-        val activeFramesRange = (totalFrames * 0.78f).toInt().coerceAtLeast(1)
-        val chunkIdx = if (currentFrame < activeFramesRange) {
-            ((currentFrame.toFloat() / activeFramesRange.toFloat()) * chunks.size).toInt().coerceIn(0, chunks.size - 1)
-        } else {
-            chunks.size - 1
-        }
+        // Use custom cumulative voice power to index words perfectly in sync with the speaker
+        val ratio = getCumulativeEnergyRatio(currentFrame, totalFrames, durationUs, timeline)
+        val chunkIdx = (ratio * chunks.size).toInt().coerceIn(0, chunks.size - 1)
         return chunks[chunkIdx]
     }
 
-    private fun getActiveTranslationChunk(translation: String?, text: String, currentFrame: Int, totalFrames: Int): String? {
+    private fun getActiveTranslationChunk(
+        translation: String?, 
+        text: String, 
+        currentFrame: Int, 
+        totalFrames: Int,
+        durationUs: Long,
+        timeline: List<Pair<Long, Float>>
+    ): String? {
         if (translation == null) return null
         val wordsOrig = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
         if (wordsOrig.size <= 5) return translation
@@ -821,12 +916,8 @@ class VideoGenerator {
             tIdx += wordsPerTransChunk
         }
         
-        val activeFramesRange = (totalFrames * 0.78f).toInt().coerceAtLeast(1)
-        val chunkIdx = if (currentFrame < activeFramesRange) {
-            ((currentFrame.toFloat() / activeFramesRange.toFloat()) * quranChunksCount).toInt().coerceIn(0, quranChunksCount - 1)
-        } else {
-            quranChunksCount - 1
-        }
+        val ratio = getCumulativeEnergyRatio(currentFrame, totalFrames, durationUs, timeline)
+        val chunkIdx = (ratio * quranChunksCount).toInt().coerceIn(0, quranChunksCount - 1)
         
         if (chunkIdx < transChunks.size) {
             return transChunks[chunkIdx]

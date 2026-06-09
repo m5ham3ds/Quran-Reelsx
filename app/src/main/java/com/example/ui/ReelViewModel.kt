@@ -215,6 +215,23 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
+    fun togglePauseGeneration() {
+        VideoGenerationService.togglePauseResumed()
+        val current = _uiState.value
+        if (current is ReelState.Loading) {
+            _uiState.value = ReelState.Loading(current.message, current.progress)
+        }
+    }
+
+    fun cancelGeneration() {
+        VideoGenerationService.cancelGeneration()
+        _uiState.value = ReelState.Idle
+    }
+
+    fun isGenerationPaused(): Boolean {
+        return VideoGenerationService.isPaused
+    }
+    
     fun reset() {
         VideoGenerationService.clearState()
         _uiState.value = ReelState.Idle

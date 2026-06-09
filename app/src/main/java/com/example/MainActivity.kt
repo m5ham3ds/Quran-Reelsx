@@ -565,6 +565,58 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                     color = LuxuryGold,
                                     trackColor = BorderColor
                                 )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Button(
+                                        onClick = { viewModel.togglePauseGeneration() },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (viewModel.isGenerationPaused()) LuxuryGold else BorderColor,
+                                            contentColor = if (viewModel.isGenerationPaused()) ScreenBg else Color.White
+                                        ),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (viewModel.isGenerationPaused()) Icons.Default.PlayArrow else Icons.Default.Refresh,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (viewModel.isGenerationPaused()) {
+                                                if (isArabic) "استئناف" else "Resume"
+                                            } else {
+                                                if (isArabic) "إيقاف مؤقت" else "Pause"
+                                            },
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                    
+                                    Button(
+                                        onClick = { viewModel.cancelGeneration() },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0x11EF5350),
+                                            contentColor = Color(0xFFEF5350)
+                                        ),
+                                        border = BorderStroke(1.dp, Color(0x33EF5350)),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isArabic) "إلغاء العملية" else "Cancel",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                             is ReelState.Success -> {
                                 val successState = state as ReelState.Success

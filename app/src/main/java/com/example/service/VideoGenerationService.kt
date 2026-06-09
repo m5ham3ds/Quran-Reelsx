@@ -42,6 +42,8 @@ class VideoGenerationService : Service() {
             return START_NOT_STICKY
         }
 
+        resetControlFlags()
+
         val surah = intent.getIntExtra("surah", 1)
         val startAyah = intent.getIntExtra("startAyah", 1)
         val endAyah = intent.getIntExtra("endAyah", 5)
@@ -271,6 +273,38 @@ class VideoGenerationService : Service() {
     companion object {
         private val _serviceState = MutableStateFlow<ReelState>(ReelState.Idle)
         val serviceState: StateFlow<ReelState> = _serviceState
+
+        @Volatile
+        var isPaused = false
+        @Volatile
+        var isCancelled = false
+        val pauseLock = Object()
+
+        fun togglePauseResumed() {
+            synchronized(pauseLock) {
+                isPaused = !isPaused
+                if (!isPaused) {
+                    pauseLock.notifyAll()
+                }
+            }
+        }
+
+        fun cancelGeneration() {
+            synchronized(pauseLock) {
+                isCancelled = true
+                isPaused = false
+                pauseLock.notifyAll()
+            }
+            _serviceState.value = ReelState.Idle
+        }
+
+        fun resetControlFlags() {
+            synchronized(pauseLock) {
+                isPaused = false
+                isCancelled = false
+                pauseLock.notifyAll()
+            }
+        }
 
         fun clearState() {
             _serviceState.value = ReelState.Idle

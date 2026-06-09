@@ -179,6 +179,43 @@ fun SocialMediaScreen(isArabic: Boolean) {
                         fontSize = 11.sp,
                         lineHeight = 15.sp
                     )
+                    
+                    Divider(color = BorderColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
+                    
+                    Text(
+                        text = if (isArabic) "🛠️ دليل المزامنة مع الحسابات الحقيقية (TikTok / Instagram / YouTube):" else "🛠️ Actual Multi-Platform Auto-Posting Guide (TikTok / Instagram / YouTube):",
+                        color = LuxuryGold,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                    
+                    val guideSteps = if (isArabic) {
+                        listOf(
+                            "1️⃣ افتح حسابك على موقع Make.com أو Zapier وقم بإنشاء سيناريو جديد (Scenario / Zap).",
+                            "2️⃣ أضف أول مودول ليكون من نوع Custom Webhook، وانسخ الرابط الذي يمنحه لك وضعه بالتطبيق هنا.",
+                            "3️⃣ أضف المودول الثاني ليرتبط بمنصتك المفضلة (مثل: تيك توك، انستجرام ريلز، أو يوتيوب شورتس).",
+                            "4️⃣ في خانة المرفقات، اختر الملف القادم من الويب هوك (اسم الحقل: video) ومن ثم اكتب وصف المنشور مستعملاً نصوص الهاشتاج والنص القرآني المولد تلقائياً.",
+                            "5️⃣ احفظ التغييرات وشغّل السيناريو؛ الآن بمجرد انتهاء تصنيع الفيديو من التطبيق سيتم رفعه ونشره تلقائياً بالكامل في حسابك الحقيقي!"
+                        )
+                    } else {
+                        listOf(
+                            "1️⃣ Open Make.com, Zapier, or your own server and initialize a new automation workflow.",
+                            "2️⃣ Build a 'Custom Webhook' trigger, copy its listening URL, and paste it into the Webhook card above.",
+                            "3️⃣ Connect your actual TikTok Content Publishing, Instagram Reels, or YouTube Shorts module next.",
+                            "4️⃣ Map the incoming 'video' file block to the post media parameter, and the generated 'payload' or description text to your post caption.",
+                            "5️⃣ Turn on the automation; now your completed video will automatically post to your actual real profile!"
+                        )
+                    }
+                    
+                    guideSteps.forEach { step ->
+                        Text(
+                            text = step,
+                            color = TextSoftColor,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
                 }
             }
 
