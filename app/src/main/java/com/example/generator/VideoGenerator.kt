@@ -6,12 +6,14 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.media.Image
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
 import android.media.MediaMuxer
 import android.net.Uri
 import android.os.Build
@@ -58,6 +60,7 @@ class VideoGenerator {
         var videoCodec: MediaCodec? = null
         var muxer: MediaMuxer? = null
         var bgBitmap: Bitmap? = null
+        var retriever: MediaMetadataRetriever? = null
         
         try {
             val verses = mutableListOf<VerseData>()
@@ -84,28 +87,62 @@ class VideoGenerator {
             val translationColorStr = settingsManager.translationColor.first()
             val pixabayApiKey = settingsManager.pixabayApiKey.first()
             
-            // 2. Fetch Background Image if Pexels or Pixabay key is provided
-            var imageLoaded = false
-            val bgFile = File(context.cacheDir, "bg_image.jpg")
+            // 2. Fetch Cinematic Background Portrait Video clip if Pexels or Pixabay API key is provided
+            var videoLoaded = false
+            val bgVideoFile = File(context.cacheDir, "bg_video.mp4")
+            try {
+                if (bgVideoFile.exists()) {
+                    bgVideoFile.delete()
+                }
+            } catch (ex: Exception) {}
             
             if (pexelsApiKey.isNotBlank()) {
-                onProgress(if (isArabic) "جاري تحميل الخلفية السينمائية (Pexels)..." else "Downloading background (Pexels)...", 0.05f)
+                onProgress(if (isArabic) "جاري البحث عن مشهد فيديو إسلامي سينمائي (Pexels)..." else "Searching for cinematic movie background (Pexels)...", 0.05f)
                 try {
                     val request = Request.Builder()
-                        .url("https://api.pexels.com/v1/search?query=scenic+night+stars+minimalist&orientation=portrait&per_page=15")
+                        .url("https://api.pexels.com/videos/search?query=scenic+night+stars+nature+peaceful&orientation=portrait&per_page=15")
                         .addHeader("Authorization", pexelsApiKey)
                         .build()
                     val response = client.newCall(request).execute()
                     if (response.isSuccessful) {
                         val body = response.body?.string() ?: ""
                         val json = JSONObject(body)
-                        val photos = json.getJSONArray("photos")
-                        if (photos.length() > 0) {
-                            val randomPhoto = photos.getJSONObject((0 until photos.length()).random())
-                            val imgUrl = randomPhoto.getJSONObject("src").getString("large2x")
-                            downloadAudio(imgUrl, bgFile)
-                            bgBitmap = android.graphics.BitmapFactory.decodeFile(bgFile.absolutePath)
-                            imageLoaded = true
+                        val videos = json.getJSONArray("videos")
+                        if (videos.length() > 0) {
+                            val randomVideo = videos.getJSONObject((0 until videos.length()).random())
+                            val videoFiles = randomVideo.getJSONArray("video_files")
+                            
+                            var selectedVideoUrl: String? = null
+                            for (v in 0 until videoFiles.length()) {
+                                val fileObj = videoFiles.getJSONObject(v)
+                                val link = fileObj.getString("link")
+                                val width = fileObj.optInt("width", 0)
+                                val height = fileObj.optInt("height", 0)
+                                // We prefer standard portrait aspect ratio mp4 formats
+                                if (width < height && link.contains("mp4", ignoreCase = true)) {
+                                    selectedVideoUrl = link
+                                    break
+                                }
+                            }
+                            if (selectedVideoUrl == null && videoFiles.length() > 0) {
+                                for (v in 0 until videoFiles.length()) {
+                                    val fileObj = videoFiles.getJSONObject(v)
+                                    val link = fileObj.getString("link")
+                                    if (link.contains("mp4", ignoreCase = true)) {
+                                        selectedVideoUrl = link
+                                        break
+                                    }
+                                }
+                            }
+                            if (selectedVideoUrl == null && videoFiles.length() > 0) {
+                                selectedVideoUrl = videoFiles.getJSONObject(0).getString("link")
+                            }
+                            
+                            if (selectedVideoUrl != null) {
+                                onProgress(if (isArabic) "جاري تحميل مشهد الخلفية والترقية السينمائية..." else "Downloading cinematic background video...", 0.08f)
+                                downloadAudio(selectedVideoUrl, bgVideoFile)
+                                videoLoaded = true
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -113,11 +150,11 @@ class VideoGenerator {
                 }
             }
             
-            if (!imageLoaded && pixabayApiKey.isNotBlank()) {
-                onProgress(if (isArabic) "جاري تحميل الخلفية السينمائية (Pixabay)..." else "Downloading background (Pixabay)...", 0.05f)
+            if (!videoLoaded && pixabayApiKey.isNotBlank()) {
+                onProgress(if (isArabic) "جاري البحث عن مشهد فيديو إسلامي سينمائي (Pixabay)..." else "Searching for cinematic movie background (Pixabay)...", 0.05f)
                 try {
                     val request = Request.Builder()
-                        .url("https://pixabay.com/api/?key=$pixabayApiKey&q=stars+night+scenic+minimalist&image_type=photo&orientation=vertical&per_page=15")
+                        .url("https://pixabay.com/api/videos/?key=$pixabayApiKey&q=stars+night+nature+peaceful&orientation=vertical&per_page=15")
                         .build()
                     val response = client.newCall(request).execute()
                     if (response.isSuccessful) {
@@ -125,11 +162,25 @@ class VideoGenerator {
                         val json = JSONObject(body)
                         val hits = json.getJSONArray("hits")
                         if (hits.length() > 0) {
-                            val randomPhoto = hits.getJSONObject((0 until hits.length()).random())
-                            val imgUrl = randomPhoto.getString("largeImageURL")
-                            downloadAudio(imgUrl, bgFile)
-                            bgBitmap = android.graphics.BitmapFactory.decodeFile(bgFile.absolutePath)
-                            imageLoaded = true
+                            val randomHit = hits.getJSONObject((0 until hits.length()).random())
+                            val videosObj = randomHit.getJSONObject("videos")
+                            val sizeKeys = listOf("medium", "small", "large", "tiny")
+                            var selectedVideoUrl: String? = null
+                            for (key in sizeKeys) {
+                                if (videosObj.has(key)) {
+                                    val vObj = videosObj.getJSONObject(key)
+                                    val url = vObj.getString("url")
+                                    if (url.isNotBlank()) {
+                                        selectedVideoUrl = url
+                                        break
+                                    }
+                                }
+                            }
+                            if (selectedVideoUrl != null) {
+                                onProgress(if (isArabic) "جاري تحميل مشهد الخلفية والترقية السينمائية..." else "Downloading cinematic background video...", 0.08f)
+                                downloadAudio(selectedVideoUrl, bgVideoFile)
+                                videoLoaded = true
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -297,26 +348,30 @@ class VideoGenerator {
             val fps = 15
             val frameDurationUs = 1000000L / fps
             
+            if (videoLoaded && bgVideoFile.exists()) {
+                try {
+                    retriever = MediaMetadataRetriever().apply {
+                        setDataSource(bgVideoFile.absolutePath)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            
+            val bgVideoDurationUs = if (retriever != null) {
+                try {
+                    val durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    val durMs = durStr?.toLongOrNull() ?: 10000L
+                    durMs * 1000L
+                } catch (e: Exception) {
+                    10_000_000L
+                }
+            } else {
+                10_000_000L
+            }
+            
             for ((idx, verse) in verses.withIndex()) {
-                onProgress(if (isArabic) "جاري تصوير مشهد الآية ${startAyah + idx}..." else "Rendering scenes for Ayah ${startAyah + idx}...", 0.5f + (idx * 0.4f / verses.size))
-                
-                val bitmap = createVerseBitmap(
-                    text = verse.text,
-                    translation = verse.translation,
-                    bgBitmap = bgBitmap,
-                    context = context,
-                    fontFamily = fontFamily,
-                    textFontSize = textFontSize,
-                    textColorStr = textColorStr,
-                    textOpacity = textOpacity,
-                    showTextBg = showTextBg,
-                    textBgColorStr = textBgColorStr,
-                    textBgOpacity = textBgOpacity,
-                    textBgRadius = textBgRadius,
-                    textPosition = textPosition,
-                    translationFontSize = translationFontSize,
-                    translationColorStr = translationColorStr
-                )
+                onProgress(if (isArabic) "جاري تصوير مشهدي الآية ${startAyah + idx}..." else "Rendering scenes for Ayah ${startAyah + idx}...", 0.5f + (idx * 0.4f / verses.size))
                 
                 val framesNeeded = Math.max(1, (verse.durationUs / frameDurationUs).toInt() + 1)
                 
@@ -324,6 +379,40 @@ class VideoGenerator {
                     if (threadError != null) {
                         throw Exception("خطأ في قنوات المعالجة الخلفية: ${threadError?.localizedMessage}")
                     }
+                    
+                    var bgFrameBitmap: Bitmap? = null
+                    if (retriever != null) {
+                        try {
+                            val targetTimeUs = videoPtsUs % bgVideoDurationUs
+                            bgFrameBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                                retriever.getScaledFrameAtTime(targetTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                            } else {
+                                retriever.getFrameAtTime(targetTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    
+                    val frameIndex = videoPtsUs / frameDurationUs
+                    val bitmap = createVerseBitmap(
+                        text = verse.text,
+                        translation = verse.translation,
+                        bgBitmap = bgFrameBitmap,
+                        context = context,
+                        fontFamily = fontFamily,
+                        textFontSize = textFontSize,
+                        textColorStr = textColorStr,
+                        textOpacity = textOpacity,
+                        showTextBg = showTextBg,
+                        textBgColorStr = textBgColorStr,
+                        textBgOpacity = textBgOpacity,
+                        textBgRadius = textBgRadius,
+                        textPosition = textPosition,
+                        translationFontSize = translationFontSize,
+                        translationColorStr = translationColorStr,
+                        frameIndex = frameIndex
+                    )
                     
                     var inIdx = -1
                     while (inIdx < 0) {
@@ -337,9 +426,13 @@ class VideoGenerator {
                     fillImageFromBitmap(img, bitmap)
                     encoder.queueInputBuffer(inIdx, 0, img.planes[0].buffer.capacity() * 3/2, videoPtsUs, 0)
                     videoPtsUs += frameDurationUs
+                    
+                    bitmap.recycle()
+                    bgFrameBitmap?.recycle()
                 }
-                bitmap.recycle()
             }
+            
+            try { retriever?.release() } catch (ex: Exception) {}
             
             var eosIdx = -1
             while (eosIdx < 0) {
@@ -393,7 +486,10 @@ class VideoGenerator {
                         null
                     )
                     
-                    uri = Uri.fromFile(targetFile)
+                    // Create an internal playable file that ExoPlayer can always read without permission
+                    val playableFile = File(context.cacheDir, "playable_reel.mp4")
+                    File(outputPath).copyTo(playableFile, overwrite = true)
+                    uri = Uri.fromFile(playableFile)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -455,6 +551,7 @@ class VideoGenerator {
                 muxer?.release()
             } catch (ex: Exception) {}
             bgBitmap?.recycle()
+            try { retriever?.release() } catch (ex: Exception) {}
             
             val errorMsg = e.message ?: "حدث خطأ غير معروف في صانع المقطع"
             withContext(Dispatchers.Main) { onError(errorMsg) }
@@ -643,7 +740,8 @@ class VideoGenerator {
         textBgRadius: Int,
         textPosition: String,
         translationFontSize: Int,
-        translationColorStr: String
+        translationColorStr: String,
+        frameIndex: Long
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(720, 1280, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
@@ -655,15 +753,46 @@ class VideoGenerator {
             canvas.drawBitmap(bgBitmap, src, dst, null)
             canvas.drawColor(Color.argb(140, 0, 0, 0))
         } else {
-            canvas.drawColor(Color.parseColor("#0F0F14"))
+            // Draw a gorgeous dynamic animated gradient background!
+            val grad = android.graphics.LinearGradient(
+                0f, 0f, 720f, 1280f,
+                intArrayOf(Color.parseColor("#07090E"), Color.parseColor("#150F18"), Color.parseColor("#0F0D16")),
+                null,
+                Shader.TileMode.CLAMP
+            )
+            val gradPaint = Paint().apply {
+                shader = grad
+            }
+            canvas.drawRect(0f, 0f, 720f, 1280f, gradPaint)
+            
+            // Draw slow-drifting stellar particles for an elite aesthetic!
+            val random = java.util.Random(42)
+            val starPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+            }
+            for (s in 0 until 40) {
+                val baseX = random.nextFloat() * 720f
+                val baseY = random.nextFloat() * 1280f
+                val speed = 0.5f + random.nextFloat() * 1.5f
+                
+                // Drift based on frameIndex (loops visually since we restrict to 1280)
+                val driftY = (baseY + frameIndex * speed) % 1280f
+                val size = 1f + random.nextFloat() * 3f
+                val baseAlpha = 50 + random.nextInt(155)
+                val twinkle = (Math.sin((frameIndex * 0.1f + s).toDouble()) * 50).toInt()
+                val finalAlpha = (baseAlpha + twinkle).coerceIn(0, 255)
+                
+                starPaint.alpha = finalAlpha
+                canvas.drawCircle(baseX, driftY, size, starPaint)
+            }
         }
         
         // 2. Typeface config
         val tf = when (fontFamily) {
-            "Amiri" -> Typeface.create("serif", Typeface.NORMAL)
-            "Cairo" -> Typeface.create("sans-serif", Typeface.NORMAL)
-            "Monospace" -> Typeface.MONOSPACE
-            else -> Typeface.DEFAULT_BOLD
+            "Amiri" -> Typeface.create("serif", Typeface.BOLD)
+            "Cairo" -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            "Monospace" -> Typeface.create("monospace", Typeface.BOLD)
+            else -> Typeface.create("sans-serif-black", Typeface.NORMAL)
         }
         
         val tColor = try {
@@ -702,7 +831,7 @@ class VideoGenerator {
         val transPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = transColor
             textAlign = Paint.Align.CENTER
-            typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+            typeface = Typeface.create("serif", Typeface.ITALIC)
             this.textSize = translationFontSize.toFloat() * 1.8f
             setShadowLayer(8f, 0f, 4f, Color.argb(200, 0, 0, 0))
         }
@@ -719,7 +848,7 @@ class VideoGenerator {
         } else {
             null
         }
-
+ 
         val totalHeight = sl.height + (transSl?.height?.plus(60f) ?: 0f)
         
         val startY = when (textPosition) {
@@ -757,9 +886,20 @@ class VideoGenerator {
         sl.draw(canvas)
         canvas.restore()
         
-        // 6. Draw translation
+        // 6. Draw translation with divider line
         if (transSl != null) {
             canvas.save()
+            
+            // Draw a beautiful elegant thin separator divider as in the App live preview!
+            val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = transColor
+                setAlpha(90)
+                strokeWidth = 3f
+                style = Paint.Style.STROKE
+            }
+            val dividerY = startY + sl.height + 25f
+            canvas.drawLine(310f, dividerY, 410f, dividerY, dividerPaint)
+            
             canvas.translate(360f, startY + sl.height + 60f)
             transSl.draw(canvas)
             canvas.restore()
