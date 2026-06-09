@@ -82,6 +82,7 @@ class VideoGenerator {
             val textBgRadius = settingsManager.textBgRadius.first()
             
             val textPosition = settingsManager.textPosition.first()
+            val textAlign = settingsManager.textAlign.first()
             
             val translationFontSize = settingsManager.translationFontSize.first()
             val translationColorStr = settingsManager.translationColor.first()
@@ -89,15 +90,19 @@ class VideoGenerator {
             
             // 2. Fetch Cinematic Background Portrait Video clip if Pexels or Pixabay API key is provided
             var videoLoaded = false
-            val bgVideoFile = File(context.cacheDir, "bg_video.mp4")
+            val downloadedVideoFiles = mutableListOf<File>()
+            
             try {
-                if (bgVideoFile.exists()) {
-                    bgVideoFile.delete()
+                val files = context.cacheDir.listFiles()
+                files?.forEach { f ->
+                    if (f.name.startsWith("bg_video_") && f.name.endsWith(".mp4")) {
+                        f.delete()
+                    }
                 }
             } catch (ex: Exception) {}
             
             if (pexelsApiKey.isNotBlank()) {
-                onProgress(if (isArabic) "جاري البحث عن مشهد فيديو إسلامي سينمائي (Pexels)..." else "Searching for cinematic movie background (Pexels)...", 0.05f)
+                onProgress(if (isArabic) "جاري البحث عن مشاهد إسلامية سينمائية (Pexels)..." else "Searching for cinematic movie scenes (Pexels)...", 0.05f)
                 try {
                     val request = Request.Builder()
                         .url("https://api.pexels.com/videos/search?query=scenic+night+stars+nature+peaceful&orientation=portrait&per_page=15")
@@ -109,38 +114,47 @@ class VideoGenerator {
                         val json = JSONObject(body)
                         val videos = json.getJSONArray("videos")
                         if (videos.length() > 0) {
-                            val randomVideo = videos.getJSONObject((0 until videos.length()).random())
-                            val videoFiles = randomVideo.getJSONArray("video_files")
-                            
-                            var selectedVideoUrl: String? = null
-                            for (v in 0 until videoFiles.length()) {
-                                val fileObj = videoFiles.getJSONObject(v)
-                                val link = fileObj.getString("link")
-                                val width = fileObj.optInt("width", 0)
-                                val height = fileObj.optInt("height", 0)
-                                // We prefer standard portrait aspect ratio mp4 formats
-                                if (width < height && link.contains("mp4", ignoreCase = true)) {
-                                    selectedVideoUrl = link
-                                    break
-                                }
-                            }
-                            if (selectedVideoUrl == null && videoFiles.length() > 0) {
+                            val countToLoad = Math.min(totalAyahs, videos.length())
+                            for (vidIdx in 0 until countToLoad) {
+                                val randomVideo = videos.getJSONObject(vidIdx)
+                                val videoFiles = randomVideo.getJSONArray("video_files")
+                                
+                                var selectedVideoUrl: String? = null
                                 for (v in 0 until videoFiles.length()) {
                                     val fileObj = videoFiles.getJSONObject(v)
                                     val link = fileObj.getString("link")
-                                    if (link.contains("mp4", ignoreCase = true)) {
+                                    val width = fileObj.optInt("width", 0)
+                                    val height = fileObj.optInt("height", 0)
+                                    if (width < height && link.contains("mp4", ignoreCase = true)) {
                                         selectedVideoUrl = link
                                         break
                                     }
                                 }
+                                if (selectedVideoUrl == null && videoFiles.length() > 0) {
+                                    for (v in 0 until videoFiles.length()) {
+                                        val fileObj = videoFiles.getJSONObject(v)
+                                        val link = fileObj.getString("link")
+                                        if (link.contains("mp4", ignoreCase = true)) {
+                                            selectedVideoUrl = link
+                                            break
+                                        }
+                                    }
+                                }
+                                if (selectedVideoUrl == null && videoFiles.length() > 0) {
+                                    selectedVideoUrl = videoFiles.getJSONObject(0).getString("link")
+                                }
+                                
+                                if (selectedVideoUrl != null) {
+                                    onProgress(
+                                        if (isArabic) "جاري تحميل مشهد سينمائي ${vidIdx + 1} من $countToLoad..." else "Downloading cinematic scene ${vidIdx + 1} of $countToLoad...",
+                                        0.05f + (vidIdx * 0.05f / countToLoad)
+                                    )
+                                    val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
+                                    downloadAudio(selectedVideoUrl, targetFile)
+                                    downloadedVideoFiles.add(targetFile)
+                                }
                             }
-                            if (selectedVideoUrl == null && videoFiles.length() > 0) {
-                                selectedVideoUrl = videoFiles.getJSONObject(0).getString("link")
-                            }
-                            
-                            if (selectedVideoUrl != null) {
-                                onProgress(if (isArabic) "جاري تحميل مشهد الخلفية والترقية السينمائية..." else "Downloading cinematic background video...", 0.08f)
-                                downloadAudio(selectedVideoUrl, bgVideoFile)
+                            if (downloadedVideoFiles.isNotEmpty()) {
                                 videoLoaded = true
                             }
                         }
@@ -151,7 +165,7 @@ class VideoGenerator {
             }
             
             if (!videoLoaded && pixabayApiKey.isNotBlank()) {
-                onProgress(if (isArabic) "جاري البحث عن مشهد فيديو إسلامي سينمائي (Pixabay)..." else "Searching for cinematic movie background (Pixabay)...", 0.05f)
+                onProgress(if (isArabic) "جاري البحث عن مشاهد إسلامية سينمائية (Pixabay)..." else "Searching for cinematic movie scenes (Pixabay)...", 0.05f)
                 try {
                     val request = Request.Builder()
                         .url("https://pixabay.com/api/videos/?key=$pixabayApiKey&q=stars+night+nature+peaceful&orientation=vertical&per_page=15")
@@ -162,23 +176,33 @@ class VideoGenerator {
                         val json = JSONObject(body)
                         val hits = json.getJSONArray("hits")
                         if (hits.length() > 0) {
-                            val randomHit = hits.getJSONObject((0 until hits.length()).random())
-                            val videosObj = randomHit.getJSONObject("videos")
-                            val sizeKeys = listOf("medium", "small", "large", "tiny")
-                            var selectedVideoUrl: String? = null
-                            for (key in sizeKeys) {
-                                if (videosObj.has(key)) {
-                                    val vObj = videosObj.getJSONObject(key)
-                                    val url = vObj.getString("url")
-                                    if (url.isNotBlank()) {
-                                        selectedVideoUrl = url
-                                        break
+                            val countToLoad = Math.min(totalAyahs, hits.length())
+                            for (vidIdx in 0 until countToLoad) {
+                                val randomHit = hits.getJSONObject(vidIdx)
+                                val videosObj = randomHit.getJSONObject("videos")
+                                val sizeKeys = listOf("medium", "small", "large", "tiny")
+                                var selectedVideoUrl: String? = null
+                                for (key in sizeKeys) {
+                                    if (videosObj.has(key)) {
+                                        val vObj = videosObj.getJSONObject(key)
+                                        val url = vObj.getString("url")
+                                        if (url.isNotBlank()) {
+                                            selectedVideoUrl = url
+                                            break
+                                        }
                                     }
                                 }
+                                if (selectedVideoUrl != null) {
+                                    onProgress(
+                                        if (isArabic) "جاري تحميل مشهد سينمائي ${vidIdx + 1} من $countToLoad..." else "Downloading cinematic scene ${vidIdx + 1} of $countToLoad...",
+                                        0.05f + (vidIdx * 0.05f / countToLoad)
+                                    )
+                                    val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
+                                    downloadAudio(selectedVideoUrl, targetFile)
+                                    downloadedVideoFiles.add(targetFile)
+                                }
                             }
-                            if (selectedVideoUrl != null) {
-                                onProgress(if (isArabic) "جاري تحميل مشهد الخلفية والترقية السينمائية..." else "Downloading cinematic background video...", 0.08f)
-                                downloadAudio(selectedVideoUrl, bgVideoFile)
+                            if (downloadedVideoFiles.isNotEmpty()) {
                                 videoLoaded = true
                             }
                         }
@@ -348,30 +372,26 @@ class VideoGenerator {
             val fps = 15
             val frameDurationUs = 1000000L / fps
             
-            if (videoLoaded && bgVideoFile.exists()) {
-                try {
-                    retriever = MediaMetadataRetriever().apply {
-                        setDataSource(bgVideoFile.absolutePath)
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-            
-            val bgVideoDurationUs = if (retriever != null) {
-                try {
-                    val durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                    val durMs = durStr?.toLongOrNull() ?: 10000L
-                    durMs * 1000L
-                } catch (e: Exception) {
-                    10_000_000L
-                }
-            } else {
-                10_000_000L
-            }
-            
             for ((idx, verse) in verses.withIndex()) {
                 onProgress(if (isArabic) "جاري تصوير مشهدي الآية ${startAyah + idx}..." else "Rendering scenes for Ayah ${startAyah + idx}...", 0.5f + (idx * 0.4f / verses.size))
+                
+                var verseRetriever: MediaMetadataRetriever? = null
+                var verseVideoDurationUs = 10_000_000L
+                if (videoLoaded && downloadedVideoFiles.isNotEmpty()) {
+                    try {
+                        val videoFile = downloadedVideoFiles[idx % downloadedVideoFiles.size]
+                        if (videoFile.exists()) {
+                            verseRetriever = MediaMetadataRetriever().apply {
+                                setDataSource(videoFile.absolutePath)
+                            }
+                            val durStr = verseRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                            val durMs = durStr?.toLongOrNull() ?: 10000L
+                            verseVideoDurationUs = durMs * 1000L
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
                 
                 val framesNeeded = Math.max(1, (verse.durationUs / frameDurationUs).toInt() + 1)
                 
@@ -381,13 +401,13 @@ class VideoGenerator {
                     }
                     
                     var bgFrameBitmap: Bitmap? = null
-                    if (retriever != null) {
+                    if (verseRetriever != null) {
                         try {
-                            val targetTimeUs = videoPtsUs % bgVideoDurationUs
+                            val localTimeUs = (i * frameDurationUs) % verseVideoDurationUs
                             bgFrameBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                                retriever.getScaledFrameAtTime(targetTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
+                                verseRetriever.getScaledFrameAtTime(localTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
                             } else {
-                                retriever.getFrameAtTime(targetTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                verseRetriever.getFrameAtTime(localTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                             }
                         } catch (e: Exception) {
                             e.printStackTrace()
@@ -395,9 +415,12 @@ class VideoGenerator {
                     }
                     
                     val frameIndex = videoPtsUs / frameDurationUs
+                    val chunkedText = getActiveTextChunk(verse.text, i, framesNeeded)
+                    val chunkedTranslation = getActiveTranslationChunk(verse.translation, verse.text, i, framesNeeded)
+                    
                     val bitmap = createVerseBitmap(
-                        text = verse.text,
-                        translation = verse.translation,
+                        text = chunkedText,
+                        translation = chunkedTranslation,
                         bgBitmap = bgFrameBitmap,
                         context = context,
                         fontFamily = fontFamily,
@@ -409,6 +432,7 @@ class VideoGenerator {
                         textBgOpacity = textBgOpacity,
                         textBgRadius = textBgRadius,
                         textPosition = textPosition,
+                        textAlign = textAlign,
                         translationFontSize = translationFontSize,
                         translationColorStr = translationColorStr,
                         frameIndex = frameIndex
@@ -430,9 +454,9 @@ class VideoGenerator {
                     bitmap.recycle()
                     bgFrameBitmap?.recycle()
                 }
+                
+                try { verseRetriever?.release() } catch (ex: Exception) {}
             }
-            
-            try { retriever?.release() } catch (ex: Exception) {}
             
             var eosIdx = -1
             while (eosIdx < 0) {
@@ -725,6 +749,61 @@ class VideoGenerator {
         try { extractor.release() } catch (e: Exception) {}
     }
 
+    private fun getActiveTextChunk(text: String, currentFrame: Int, totalFrames: Int): String {
+        val words = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (words.size <= 5) return text // Short verse, show complete text
+        
+        // Group words into chunks of 4-5 words
+        val chunkSize = if (words.size <= 8) 4 else 5
+        val chunks = mutableListOf<String>()
+        var i = 0
+        while (i < words.size) {
+            val end = Math.min(i + chunkSize, words.size)
+            chunks.add(words.subList(i, end).joinToString(" "))
+            i += chunkSize
+        }
+        
+        if (chunks.isEmpty()) return text
+        
+        val chunkIdx = ((currentFrame.toFloat() / totalFrames.toFloat()) * chunks.size).toInt().coerceIn(0, chunks.size - 1)
+        return chunks[chunkIdx]
+    }
+
+    private fun getActiveTranslationChunk(translation: String?, text: String, currentFrame: Int, totalFrames: Int): String? {
+        if (translation == null) return null
+        val wordsOrig = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (wordsOrig.size <= 5) return translation
+        
+        val transWords = translation.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (transWords.size <= 6) return translation
+        
+        // Calculate chunks of original text
+        val chunkSize = if (wordsOrig.size <= 8) 4 else 5
+        var quranChunksCount = 0
+        var i = 0
+        while (i < wordsOrig.size) {
+            quranChunksCount++
+            i += chunkSize
+        }
+        if (quranChunksCount <= 1) return translation
+        
+        // Proportional slicing of translation words into the exact same amount of pages
+        val wordsPerTransChunk = Math.ceil(transWords.size.toDouble() / quranChunksCount.toDouble()).toInt().coerceAtLeast(1)
+        val transChunks = mutableListOf<String>()
+        var tIdx = 0
+        while (tIdx < transWords.size) {
+            val end = Math.min(tIdx + wordsPerTransChunk, transWords.size)
+            transChunks.add(transWords.subList(tIdx, end).joinToString(" "))
+            tIdx += wordsPerTransChunk
+        }
+        
+        val chunkIdx = ((currentFrame.toFloat() / totalFrames.toFloat()) * quranChunksCount).toInt().coerceIn(0, quranChunksCount - 1)
+        if (chunkIdx < transChunks.size) {
+            return transChunks[chunkIdx]
+        }
+        return transChunks.lastOrNull() ?: translation
+    }
+
     private fun createVerseBitmap(
         text: String,
         translation: String?,
@@ -739,6 +818,7 @@ class VideoGenerator {
         textBgOpacity: Float,
         textBgRadius: Int,
         textPosition: String,
+        textAlign: String,
         translationFontSize: Int,
         translationColorStr: String,
         frameIndex: Long
@@ -805,20 +885,26 @@ class VideoGenerator {
         
         val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = finalTextColor
-            textAlign = Paint.Align.CENTER
+            this.textAlign = Paint.Align.LEFT
             typeface = tf
             this.textSize = textFontSize.toFloat() * 1.8f
             setShadowLayer(8f, 0f, 4f, Color.argb(200, 0, 0, 0))
         }
         
+        val layoutAlign = when (textAlign) {
+            "Left" -> Layout.Alignment.ALIGN_NORMAL
+            "Right" -> Layout.Alignment.ALIGN_OPPOSITE
+            else -> Layout.Alignment.ALIGN_CENTER
+        }
+        
         val sl = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             StaticLayout.Builder.obtain(text, 0, text.length, textPaint, 620)
-                .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                .setAlignment(layoutAlign)
                 .setLineSpacing(0f, 1.4f)
                 .build()
         } else {
             @Suppress("DEPRECATION")
-            StaticLayout(text, textPaint, 620, Layout.Alignment.ALIGN_CENTER, 1.4f, 0f, false)
+            StaticLayout(text, textPaint, 620, layoutAlign, 1.4f, 0f, false)
         }
         
         // 3. Translation Paint
@@ -830,7 +916,7 @@ class VideoGenerator {
         
         val transPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = transColor
-            textAlign = Paint.Align.CENTER
+            this.textAlign = Paint.Align.LEFT
             typeface = Typeface.create("serif", Typeface.ITALIC)
             this.textSize = translationFontSize.toFloat() * 1.8f
             setShadowLayer(8f, 0f, 4f, Color.argb(200, 0, 0, 0))
@@ -839,11 +925,11 @@ class VideoGenerator {
         val transSl: StaticLayout? = if (translation != null) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 StaticLayout.Builder.obtain(translation, 0, translation.length, transPaint, 620)
-                    .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                    .setAlignment(layoutAlign)
                     .build()
             } else {
                 @Suppress("DEPRECATION")
-                StaticLayout(translation, transPaint, 620, Layout.Alignment.ALIGN_CENTER, 1f, 0f, false)
+                StaticLayout(translation, transPaint, 620, layoutAlign, 1f, 0f, false)
             }
         } else {
             null
@@ -882,7 +968,7 @@ class VideoGenerator {
         
         // 5. Draw Primary Text
         canvas.save()
-        canvas.translate(360f, startY)
+        canvas.translate(50f, startY)
         sl.draw(canvas)
         canvas.restore()
         
@@ -898,9 +984,14 @@ class VideoGenerator {
                 style = Paint.Style.STROKE
             }
             val dividerY = startY + sl.height + 25f
-            canvas.drawLine(310f, dividerY, 410f, dividerY, dividerPaint)
             
-            canvas.translate(360f, startY + sl.height + 60f)
+            when (textAlign) {
+                "Left" -> canvas.drawLine(50f, dividerY, 150f, dividerY, dividerPaint)
+                "Right" -> canvas.drawLine(570f, dividerY, 670f, dividerY, dividerPaint)
+                else -> canvas.drawLine(310f, dividerY, 410f, dividerY, dividerPaint)
+            }
+            
+            canvas.translate(50f, startY + sl.height + 60f)
             transSl.draw(canvas)
             canvas.restore()
         }

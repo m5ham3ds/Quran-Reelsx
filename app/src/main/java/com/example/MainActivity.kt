@@ -671,6 +671,7 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
     val textBgRadius by settingsManager.textBgRadius.collectAsState(initial = 16)
     
     val textPosition by settingsManager.textPosition.collectAsState(initial = "Center")
+    val textAlign by settingsManager.textAlign.collectAsState(initial = "Center")
     
     val showTranslation by settingsManager.showTranslation.collectAsState(initial = true)
     val translationFontSize by settingsManager.translationFontSize.collectAsState(initial = 25)
@@ -1043,6 +1044,41 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                             }
                         }
                     }
+
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
+                        Icon(Icons.Default.Menu, contentDescription = null, tint = LuxuryGold, modifier = Modifier.size(22.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(if (isArabic) "محاذاة النص للفقرة" else "Paragraph Alignment", color = TextSoftColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val alignments = listOf("Left" to "يسار", "Center" to "وسط", "Right" to "يمين")
+                        alignments.forEach { (align, label) ->
+                            val isSelected = textAlign == align
+                            Card(
+                                onClick = { scope.launch { settingsManager.setTextAlign(align) } },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) LuxuryGold else ScreenBg
+                                ),
+                                border = if (!isSelected) BorderStroke(1.dp, BorderColor) else null,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(50.dp)
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = label,
+                                        color = if (isSelected) ScreenBg else TextSoftColor,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1159,6 +1195,7 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                 textBgOpacity = textBgOpacity,
                 textBgRadius = textBgRadius,
                 textPosition = textPosition,
+                textAlignStr = textAlign,
                 showTranslation = showTranslation,
                 translationFontSize = translationFontSize,
                 translationColorStr = translationColorStr,
@@ -1179,6 +1216,7 @@ fun LivePreviewContainer(
     textBgOpacity: Float,
     textBgRadius: Int,
     textPosition: String,
+    textAlignStr: String,
     showTranslation: Boolean,
     translationFontSize: Int,
     translationColorStr: String,
@@ -1214,7 +1252,11 @@ fun LivePreviewContainer(
         ) {
             val contentCol = @Composable {
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                    horizontalAlignment = when (textAlignStr) {
+                        "Left" -> Alignment.Start
+                        "Right" -> Alignment.End
+                        else -> Alignment.CenterHorizontally
+                    },
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                     modifier = if (showTextBg) {
                         val bgColor = try { Color(android.graphics.Color.parseColor(textBgColorStr)) } catch (e: Exception) { Color.Black }
@@ -1243,7 +1285,11 @@ fun LivePreviewContainer(
                         fontSize = (fontSize * 0.7f).sp, // Scaled for preview fits
                         fontWeight = FontWeight.Bold,
                         color = quranTextColor,
-                        textAlign = TextAlign.Center,
+                        textAlign = when (textAlignStr) {
+                            "Left" -> TextAlign.Left
+                            "Right" -> TextAlign.Right
+                            else -> TextAlign.Center
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -1253,7 +1299,8 @@ fun LivePreviewContainer(
                         HorizontalDivider(
                             modifier = Modifier
                                 .width(50.dp)
-                                .alpha(0.3f),
+                                .alpha(0.3f)
+                                .align(Alignment.CenterHorizontally),
                             thickness = 1.dp,
                             color = transColor
                         )
@@ -1262,7 +1309,11 @@ fun LivePreviewContainer(
                             fontSize = (translationFontSize * 0.65f).sp,
                             fontWeight = FontWeight.Medium,
                             color = transColor,
-                            textAlign = TextAlign.Center,
+                            textAlign = when (textAlignStr) {
+                                "Left" -> TextAlign.Left
+                                "Right" -> TextAlign.Right
+                                else -> TextAlign.Center
+                            },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
