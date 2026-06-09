@@ -235,6 +235,37 @@ class VideoGenerator {
                 }
             }
             
+            // Fallback to high-quality direct public video CDN loop URLs so we NEVER show a blank background or static image
+            if (!videoLoaded) {
+                onProgress(if (isArabic) "جاري تحميل مشاهد طبيعية متحركة عالية الجودة..." else "Downloading premium cinematic video loops...", 0.05f)
+                val directUrls = listOf(
+                    "https://assets.mixkit.co/videos/preview/mixkit-vertical-shot-of-a-beautiful-waterfall-in-a-forest-43756-large.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-forest-stream-in-vertical-shot-44445-large.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-waves-crashing-on-a-sandy-beach-from-above-41793-large.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-vertical-shot-of-the-sea-under-a-clear-sky-40767-large.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-light-rain-falling-on-green-leaves-vertical-shot-42022-large.mp4"
+                )
+                val countToLoad = Math.min(totalAyahs, directUrls.size)
+                for (vidIdx in 0 until countToLoad) {
+                    try {
+                        onProgress(
+                            if (isArabic) "جاري تحميل مشهد سينمائي عالي الجودة ${vidIdx + 1} من $countToLoad..." else "Loading cinematic nature loop ${vidIdx + 1} of $countToLoad...",
+                            0.05f + (vidIdx * 0.05f / countToLoad)
+                        )
+                        val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
+                        downloadAudio(directUrls[vidIdx], targetFile)
+                        if (targetFile.exists() && targetFile.length() > 0) {
+                            downloadedVideoFiles.add(targetFile)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                if (downloadedVideoFiles.isNotEmpty()) {
+                    videoLoaded = true
+                }
+            }
+            
             // 3. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
             for (i in 0 until totalAyahs) {
                 val ayah = startAyah + i

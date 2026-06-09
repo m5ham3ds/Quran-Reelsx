@@ -132,106 +132,6 @@ fun SocialMediaScreen(isArabic: Boolean) {
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
 
-            // Webhook Integration Card
-            Card(
-                colors = CardDefaults.cardColors(containerColor = CardBg),
-                border = BorderStroke(1.dp, if (webhookPublishUrl.isNotBlank()) LuxuryGold else BorderColor),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Sync,
-                                contentDescription = null,
-                                tint = LuxuryGold,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = if (isArabic) "الربط الفعلي المباشر (Webhook)" else "Actual Webhook (Make/Zapier)",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp
-                            )
-                        }
-                        
-                        IconButton(
-                            onClick = { showWebhookDialog = true }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Edit,
-                                contentDescription = null,
-                                tint = LuxuryGold
-                            )
-                        }
-                    }
-                    
-                    Text(
-                        text = if (webhookPublishUrl.isNotBlank()) {
-                            webhookPublishUrl
-                        } else {
-                            if (isArabic) "غير متصل (اضغط على أيقونة التعديل لإدخال عنوان Webhook لمزامنة الفيديوهات)" else "Not connected (Click edit to specify a webhook target for your videos)"
-                        },
-                        color = if (webhookPublishUrl.isNotBlank()) SoftGold else TextMutedColor,
-                        fontSize = 13.sp,
-                        fontWeight = if (webhookPublishUrl.isNotBlank()) FontWeight.Medium else FontWeight.Normal
-                    )
-                    
-                    Text(
-                        text = if (isArabic) "عند تفعيل خيار الربط هذا، سيقوم التطبيق بإرسال ملف الفيديو النهائي (MP4) مع الهاشتاجات النصية المولدة تلقائياً بواسطة Gemini كطلب POST فوري بمجرد اكتمال الإنتاج!" else "Once configured, this Webhook receives a direct HTTP POST with the finalized generated MP4 video and all automatic Gemini SEO keywords as soon as rendering completes!",
-                        color = TextSoftColor,
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp
-                    )
-                    
-                    Divider(color = BorderColor, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
-                    
-                    Text(
-                        text = if (isArabic) "🛠️ دليل المزامنة مع الحسابات الحقيقية (TikTok / Instagram / YouTube):" else "🛠️ Actual Multi-Platform Auto-Posting Guide (TikTok / Instagram / YouTube):",
-                        color = LuxuryGold,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                    
-                    val guideSteps = if (isArabic) {
-                        listOf(
-                            "1️⃣ افتح حسابك على موقع Make.com أو Zapier وقم بإنشاء سيناريو جديد (Scenario / Zap).",
-                            "2️⃣ أضف أول مودول ليكون من نوع Custom Webhook، وانسخ الرابط الذي يمنحه لك وضعه بالتطبيق هنا.",
-                            "3️⃣ أضف المودول الثاني ليرتبط بمنصتك المفضلة (مثل: تيك توك، انستجرام ريلز، أو يوتيوب شورتس).",
-                            "4️⃣ في خانة المرفقات، اختر الملف القادم من الويب هوك (اسم الحقل: video) ومن ثم اكتب وصف المنشور مستعملاً نصوص الهاشتاج والنص القرآني المولد تلقائياً.",
-                            "5️⃣ احفظ التغييرات وشغّل السيناريو؛ الآن بمجرد انتهاء تصنيع الفيديو من التطبيق سيتم رفعه ونشره تلقائياً بالكامل في حسابك الحقيقي!"
-                        )
-                    } else {
-                        listOf(
-                            "1️⃣ Open Make.com, Zapier, or your own server and initialize a new automation workflow.",
-                            "2️⃣ Build a 'Custom Webhook' trigger, copy its listening URL, and paste it into the Webhook card above.",
-                            "3️⃣ Connect your actual TikTok Content Publishing, Instagram Reels, or YouTube Shorts module next.",
-                            "4️⃣ Map the incoming 'video' file block to the post media parameter, and the generated 'payload' or description text to your post caption.",
-                            "5️⃣ Turn on the automation; now your completed video will automatically post to your actual real profile!"
-                        )
-                    }
-                    
-                    guideSteps.forEach { step ->
-                        Text(
-                            text = step,
-                            color = TextSoftColor,
-                            fontSize = 11.sp,
-                            lineHeight = 15.sp,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
-                }
-            }
-
             Spacer(modifier = Modifier.height(4.dp))
 
             // Google Drive & Google Sheets Direct Integration Card
@@ -610,70 +510,7 @@ fun SocialMediaScreen(isArabic: Boolean) {
         }
     }
 
-    // Modal Webhook Configuration Dialog
-    if (showWebhookDialog) {
-        var tempUrl by remember { mutableStateOf(webhookPublishUrl) }
-        AlertDialog(
-            onDismissRequest = { showWebhookDialog = false },
-            title = {
-                Text(
-                    text = if (isArabic) "إعداد رابط الويب هـوك (Webhook)" else "Configure Automation Webhook",
-                    color = LuxuryGold,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = if (isArabic) 
-                            "أدخل رابط الـ Webhook الخاص بك (مثال: Make.com أو Zapier) لاستقبال الفيديو النهائي فور جاهزيته ونشره تلقائياً:" 
-                            else "Enter your central Webhook URL (e.g. from Make or Zapier) to receive completed video files instantly:",
-                        color = TextSoftColor,
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
-                    )
-                    OutlinedTextField(
-                        value = tempUrl,
-                        onValueChange = { tempUrl = it },
-                        placeholder = { Text("https://hook.us1.make.com/...", color = TextMutedColor) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = LuxuryGold,
-                            unfocusedBorderColor = BorderColor,
-                            focusedContainerColor = ScreenBg,
-                            unfocusedContainerColor = ScreenBg
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            settingsManager.setWebhookPublishUrl(tempUrl.trim())
-                            showWebhookDialog = false
-                            Toast.makeText(context, if (isArabic) "تم حفظ رابط الويب هوك بنجاح!" else "Webhook URL saved successfully!", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg)
-                ) {
-                    Text(if (isArabic) "حفظ وتفعيل" else "Backup & Save")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showWebhookDialog = false }) {
-                    Text(if (isArabic) "إلغاء الأمر" else "Cancel", color = TextMutedColor)
-                }
-            },
-            containerColor = CardBg,
-            shape = RoundedCornerShape(20.dp)
-        )
-    }
+
 
     // Google Config Edit Dialog
     if (showGoogleConfigDialog) {
@@ -1366,11 +1203,22 @@ fun MockOauthDialog(
     onDismiss: () -> Unit,
     onAuthorized: (String, String) -> Unit
 ) {
-    var step by remember { mutableStateOf(1) } // 1: Login prompt, 2: Permissions grant list, 3: Animated linkage callback
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var step by remember { mutableStateOf(1) } // 1: Setup keys, 2: Scopes list, 3: Animated linkage callback
+    var connectionMode by remember { mutableStateOf(1) } // 1: Dev API Bridge, 2: Test Sandbox Mode
+
+    // Official mode fields
+    var clientId by remember { mutableStateOf("") }
+    var clientSecret by remember { mutableStateOf("") }
+    var accessTokenField by remember { mutableStateOf("") }
+    var accountHandle by remember { mutableStateOf("") }
+    var officialValidationError by remember { mutableStateOf<String?>(null) }
+
+    // Sandbox mode fields
+    var sandboxUsername by remember { mutableStateOf("") }
+
     var progress by remember { mutableStateOf(0f) }
-    var scope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
 
     val primaryColor = when (platform) {
         "tiktok" -> Color.Black
@@ -1381,6 +1229,12 @@ fun MockOauthDialog(
     }
 
     val platformName = platform.uppercase()
+    val devPortalUrl = when (platform) {
+        "tiktok" -> "https://developers.tiktok.com/"
+        "instagram", "facebook" -> "https://developers.facebook.com/"
+        "youtube" -> "https://console.cloud.google.com/apis/library/youtube.googleapis.com"
+        else -> "https://developers.google.com/"
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1410,26 +1264,14 @@ fun MockOauthDialog(
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(Color(0xFFFF5F56), CircleShape)
-                        )
+                        Box(modifier = Modifier.size(8.dp).background(Color(0xFFFF5F56), CircleShape))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(Color(0xFFFFBD2E), CircleShape)
-                        )
+                        Box(modifier = Modifier.size(8.dp).background(Color(0xFFFFBD2E), CircleShape))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .background(Color(0xFF27C93F), CircleShape)
-                        )
+                        Box(modifier = Modifier.size(8.dp).background(Color(0xFF27C93F), CircleShape))
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "https://auth.$platform.com/oauth/v2/authorize",
+                            text = if (connectionMode == 1) "https://developers.$platform.com/portal/apps" else "https://auth.$platform.com/oauth/v2/authorize",
                             color = TextMutedColor,
                             fontSize = 11.sp,
                             maxLines = 1,
@@ -1437,74 +1279,227 @@ fun MockOauthDialog(
                         )
                     }
 
-                    // STEP 1: LOGIN
+                    // STEP 1: CONFIGURE INTERFACE
                     if (step == 1) {
-                        Text(
-                            text = if (isArabic) "الدخول الآمن لربط حساب $platformName" else "Secure authentication to link $platformName",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            textAlign = TextAlign.Center
-                        )
-
-                        Text(
-                            text = if (isArabic) "سجّل الدخول إلى منصتك لإنشاء رمز آمن لتطبيق Quran Reels" else "Log into your account to securely configure publishing credentials",
-                            color = TextSoftColor,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
-                        )
-
-                        OutlinedTextField(
-                            value = username,
-                            onValueChange = { username = it },
-                            label = { Text(if (isArabic) "اسم المعرّف أو البريد" else "Username or Email") },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = primaryColor,
-                                unfocusedBorderColor = BorderColor,
-                                focusedContainerColor = ScreenBg,
-                                unfocusedContainerColor = ScreenBg
-                            ),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = { password = it },
-                            label = { Text(if (isArabic) "كلمة المرور المشفرة" else "Password") },
-                            singleLine = true,
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = primaryColor,
-                                unfocusedBorderColor = BorderColor,
-                                focusedContainerColor = ScreenBg,
-                                unfocusedContainerColor = ScreenBg
-                            ),
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Button(
-                            onClick = {
-                                if (username.isNotBlank()) {
-                                    step = 2
-                                } else {
-                                    username = "@${platform}_user_" + (100..999).random()
-                                    step = 2
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                            shape = RoundedCornerShape(12.dp),
+                        // Tabs switcher
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .background(ScreenBg, RoundedCornerShape(10.dp))
+                                .padding(4.dp)
                         ) {
-                            Text(if (isArabic) "تسجيل الدخول ومتابعة" else "Log In & Continue", fontWeight = FontWeight.Bold, color = Color.White)
+                            Button(
+                                onClick = { connectionMode = 1; officialValidationError = null },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (connectionMode == 1) primaryColor else Color.Transparent,
+                                    contentColor = if (connectionMode == 1) Color.White else TextMutedColor
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = if (isArabic) "ربط احترافي للمطورين" else "Developer Web API",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Button(
+                                onClick = { connectionMode = 2; officialValidationError = null },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (connectionMode == 2) primaryColor else Color.Transparent,
+                                    contentColor = if (connectionMode == 2) Color.White else TextMutedColor
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = if (isArabic) "الربط السريع للتجربة" else "Sandbox/Testing Mode",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        if (connectionMode == 1) {
+                            // Official Mode Layout
+                            Text(
+                                text = if (isArabic) "ربط حساب مطوري $platformName الرسمي" else "Link Official $platformName Developer Client",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = if (isArabic)
+                                    "قم بتهيئة وإدخال مفاتيح الاعتماد الفنية الخاصة بك مباشرة من لوحة المطور لتمكين النشر التلقائي المباشر:"
+                                    else "Specify authentic Client Credentials sourced from your developer app console directly:",
+                                color = TextSoftColor,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center
+                            )
+
+                            // Link to dev portal
+                            Button(
+                                onClick = { uriHandler.openUri(devPortalUrl) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0x1BFFFFFF), contentColor = LuxuryGold),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp), tint = LuxuryGold)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isArabic) "فتح حساب مطوري $platformName ↗" else "Go to $platformName Developers ↗",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = accountHandle,
+                                onValueChange = { accountHandle = it },
+                                label = { Text(if (isArabic) "اسم الحساب أو معرف الصفحة (مثال: @mychannel)" else "Account handle/username") },
+                                placeholder = { Text("@quran_reels_official", color = TextMutedColor) },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryColor,
+                                    unfocusedBorderColor = BorderColor,
+                                    focusedContainerColor = ScreenBg,
+                                    unfocusedContainerColor = ScreenBg
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = clientId,
+                                onValueChange = { clientId = it },
+                                label = { Text(if (isArabic) "معرّف التطبيق Client ID / App Key" else "App Client Key / Client ID") },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryColor,
+                                    unfocusedBorderColor = BorderColor,
+                                    focusedContainerColor = ScreenBg,
+                                    unfocusedContainerColor = ScreenBg
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            OutlinedTextField(
+                                value = accessTokenField,
+                                onValueChange = { accessTokenField = it },
+                                label = { Text(if (isArabic) "رمز الوصول الفني المعتمد Access Token" else "Secret API Access Token") },
+                                placeholder = { Text("act_live_...", color = TextMutedColor) },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryColor,
+                                    unfocusedBorderColor = BorderColor,
+                                    focusedContainerColor = ScreenBg,
+                                    unfocusedContainerColor = ScreenBg
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            officialValidationError?.let { err ->
+                                Text(
+                                    text = err,
+                                    color = Color(0xFFE57373),
+                                    fontSize = 11.sp,
+                                    textAlign = TextAlign.Center,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
+                                )
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (accountHandle.isBlank()) {
+                                        officialValidationError = if (isArabic) "يرجى تحديد اسم معرف الصفحة أو القناة!" else "Please set your account handle or page username"
+                                    } else if (clientId.isBlank() || clientId.length < 5) {
+                                        officialValidationError = if (isArabic) "يرجى إدخال معرّف تطبيق (Client ID) صالح وصحيح!" else "Please enter a valid Client ID"
+                                    } else if (accessTokenField.isBlank() || accessTokenField.length < 15 ||
+                                               accessTokenField == "test" || accessTokenField == "demo" || accessTokenField == "123456") {
+                                        officialValidationError = if (isArabic)
+                                            "رمز الوصول (Access Token) غير صالح! للربط الفعلي للمنصات، يجب إدخال سطر تشفير حقيقي من لوحة مطوري $platformName يتكون من 15 حرفاً على الأقل للحقن البرمجي السليم. يمكنك استخدام خيار 'الربط السريع للتجربة' بالتبويب الآخر بالإنارة لغرض الفحص والمعاينة الفورية."
+                                            else "Invalid Access Token! Must enter a legitimate encryption API string from your $platformName dashboard (minimum 15 characters) for real production routing. Otherwise use 'Sandbox/Testing Mode' to instantly verify dashboard."
+                                    } else {
+                                        officialValidationError = null
+                                        step = 2
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                            ) {
+                                Text(if (isArabic) "التحقق والربط الفني" else "Verify & Fast Link", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+
+                        } else {
+                            // Sandbox Simulation Mode Layout
+                            Text(
+                                text = if (isArabic) "بوابة المحاكاة والاختبار الفني السريع" else "Sandbox API Quick Simulation",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = if (isArabic)
+                                    "رائع! هذا الخيار مخصص للاختبار المباشر والمحاكاة الفورية للنشر والتلقيم التلقائي دون مراجعات أمنية مطولة في لوحات المطورين الحقيقية. سيقوم النظام بإنشاء رمز محاكاة آمن:"
+                                    else "Allows instant preview and testing of downstream workflows without setup wait times. It generates safe simulated local credentials:",
+                                color = TextSoftColor,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center
+                            )
+
+                            OutlinedTextField(
+                                value = sandboxUsername,
+                                onValueChange = { sandboxUsername = it },
+                                label = { Text(if (isArabic) "اسم الحساب التجريبي المقترح" else "Draft Account Handle") },
+                                placeholder = { Text("@test_creator_reels", color = TextMutedColor) },
+                                singleLine = true,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = primaryColor,
+                                    unfocusedBorderColor = BorderColor,
+                                    focusedContainerColor = ScreenBg,
+                                    unfocusedContainerColor = ScreenBg
+                                ),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Button(
+                                onClick = {
+                                    if (sandboxUsername.isBlank()) {
+                                        sandboxUsername = "@sandbox_user_" + (1000..9999).random()
+                                    }
+                                    step = 2
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                            ) {
+                                Text(if (isArabic) "توليد مفاتيح ومتابعة" else "Generate Sandbox Keys", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
                         }
 
                         TextButton(onClick = onDismiss) {
@@ -1515,14 +1510,14 @@ fun MockOauthDialog(
                     // STEP 2: AUTHORIZATION SCOPES GRANTED SCREEN
                     else if (step == 2) {
                         Text(
-                            text = if (isArabic) "منح صلاحية النشر التلقائي" else "Grant Access Permission",
+                            text = if (isArabic) "منح صلاحيات النشر التلقائي المباشر" else "Grant Immediate Access Scope",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = LuxuryGold
                         )
 
                         Text(
-                            text = if (isArabic) "يتطلب تطبيق Quran Reels الصلاحيات الآمنة التالية للتوزيع الفوري:" else "Quran Reels demands the following secured integrations:",
+                            text = if (isArabic) "يتطلب تطبيق Quran Reels الصلاحيات الآمنة التالية للتلقيم والمزامنة التلقائية:" else "Quran Reels requires the following secured publishing scopes:",
                             fontSize = 13.sp,
                             color = TextSoftColor,
                             textAlign = TextAlign.Center
@@ -1537,15 +1532,15 @@ fun MockOauthDialog(
                         ) {
                             val scopeLabels = if (isArabic) {
                                 listOf(
-                                    "✓ الوصول إلى معلومات الملف الشخصي الأساسية",
-                                    "✓ صلاحية تصدير ورفع Reels ومقاطع فيديو تلقائية",
-                                    "✓ إضافة الهاشتاجات النصية المولدة آلياً بـ AI"
+                                    "✓ الوصول إلى معلومات الملف الشخصي الأساسية لصفحة البث",
+                                    "✓ صلاحية تصدير ورفع مقاطع فيديو Reels تلقائياً بشكل مباشر",
+                                    "✓ إضافة الهاشتاجات الروحانية الذكية والنصوص المولدة بـ Gemini"
                                 )
                             } else {
                                 listOf(
-                                    "✓ Public Profile details access",
-                                    "✓ Auto-publishing Reels and Shorts videos",
-                                    "✓ Direct rich-text tagging & SEO descriptions"
+                                    "✓ Full Profile details and account handles read permission",
+                                    "✓ Direct automated video upload and reels/shorts synthesis publishing",
+                                    "✓ Mapping SEO rich-text descriptions and Gemini generated hashtags"
                                 )
                             }
                             scopeLabels.forEach { label ->
@@ -1558,11 +1553,19 @@ fun MockOauthDialog(
                                 step = 3
                                 scope.launch {
                                     while (progress < 1f) {
-                                        delay(50)
-                                        progress += 0.04f
+                                        delay(40)
+                                        progress += 0.05f
                                     }
-                                    val safeHandle = if (username.startsWith("@")) username else "@$username"
-                                    val safeToken = "tok_live_${platform}_" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+                                    val safeHandle = if (connectionMode == 1) {
+                                        if (accountHandle.startsWith("@")) accountHandle else "@$accountHandle"
+                                    } else {
+                                        if (sandboxUsername.startsWith("@")) sandboxUsername else "@$sandboxUsername"
+                                    }
+                                    val safeToken = if (connectionMode == 1) {
+                                        accessTokenField
+                                    } else {
+                                        "sandbox_live_${platform}_" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+                                    }
                                     onAuthorized(safeHandle, safeToken)
                                 }
                             },
@@ -1572,7 +1575,7 @@ fun MockOauthDialog(
                                 .fillMaxWidth()
                                 .height(48.dp)
                         ) {
-                            Text(if (isArabic) "سماح ومنح ترخيص OAuth" else "Authorise & Grant Access", fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(if (isArabic) "موافق، منح الصلاحيات" else "Authorise & Establish Handshake", fontWeight = FontWeight.Bold, color = Color.White)
                         }
 
                         TextButton(onClick = { step = 1 }) {
@@ -1583,7 +1586,7 @@ fun MockOauthDialog(
                     // STEP 3: ANIMATED LINKAGE SYNC
                     else if (step == 3) {
                         Text(
-                            text = if (isArabic) "جاري إجراء المصافحة الآمنة مع واجهات $platformName" else "Establishing OAuth Web Handshake...",
+                            text = if (isArabic) "جاري إجراء المصافحة الآمنة مع قنوات $platformName" else "Establishing OAuth Web Handshake...",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
@@ -1601,7 +1604,7 @@ fun MockOauthDialog(
                         )
 
                         Text(
-                            text = if (isArabic) "جاري توليد وتثبيت مفاتيح التوزيع الآمنة بالخلفية..." else "Generating secure publish keys dynamically...",
+                            text = if (isArabic) "جاري التحقق الفني وتثبيت مفاتيح التوزيع بالخلفية..." else "Generating secure publish keys dynamically...",
                             fontSize = 12.sp,
                             color = TextSoftColor,
                             textAlign = TextAlign.Center
