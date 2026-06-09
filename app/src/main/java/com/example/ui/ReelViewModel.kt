@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 sealed class ReelState {
@@ -62,13 +64,19 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                         val isFacebook = settingsManager.facebookLinked.first() && settingsManager.facebookAutopost.first()
                         val isYoutube = settingsManager.youtubeLinked.first() && settingsManager.youtubeAutopost.first()
 
-                        val hasAnyAutopost = isTiktok || isInstagram || isFacebook || isYoutube
+                        val tiktokToken = settingsManager.tiktokAccessToken.first()
+                        val instagramToken = settingsManager.instagramAccessToken.first()
+                        val facebookToken = settingsManager.facebookAccessToken.first()
+                        val youtubeToken = settingsManager.youtubeAccessToken.first()
+                        val webhookUrl = settingsManager.webhookPublishUrl.first()
+
+                        val hasAnyAutopost = isTiktok || isInstagram || isFacebook || isYoutube || webhookUrl.isNotBlank()
 
                         if (hasAnyAutopost) {
                             val isArabic = settingsManager.language.first() == "ar"
                             _uiState.value = ReelState.Loading(
-                                if (isArabic) "جاري توليد تفاصيل النشر بالذكاء الاصطناعي (Gemini)..." 
-                                else "Generating social publishing metadata via Gemini...",
+                                if (isArabic) "جاري النشر التلقائي وتوزيع الفيديو الفعلي..." 
+                                else "Performing real-time auto-publishing and distribution...",
                                 0.95f
                             )
 
@@ -88,6 +96,23 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                                 isYoutube = isYoutube
                             )
 
+                            // If a real Webhook is configured, dispatch the video and data to it
+                            if (webhookUrl.isNotBlank()) {
+                                dispatchWebhook(
+                                    webhookUrl = webhookUrl,
+                                    videoUri = state.uri,
+                                    surah = currentSurah,
+                                    startAyah = currentStartAyah,
+                                    endAyah = currentEndAyah,
+                                    reciter = currentReciterId,
+                                    tiktokToken = tiktokToken,
+                                    instagramToken = instagramToken,
+                                    facebookToken = facebookToken,
+                                    youtubeToken = youtubeToken,
+                                    metaResult = meta
+                                )
+                            }
+
                             _uiState.value = ReelState.Success(
                                 uri = state.uri,
                                 generatedMeta = meta,
@@ -103,7 +128,7 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                                 uri = state.uri,
                                 generatedMeta = null,
                                 publishedPlatforms = emptyMap()
-                            )
+                              )
                         }
                     }
                     is ReelState.Loading -> {
@@ -192,5 +217,87 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
     fun reset() {
         VideoGenerationService.clearState()
         _uiState.value = ReelState.Idle
+    }
+
+    private fun dispatchWebhook(
+        webhookUrl: String,
+        videoUri: Uri,
+        surah: Int,
+        startAyah: Int,
+        endAyah: Int,
+        reciter: String,
+        tiktokToken: String,
+        instagramToken: String,
+        facebookToken: String,
+        youtubeToken: String,
+        metaResult: com.example.generator.GeneratedMetaResult?
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val json = JSONObject().apply {
+                    put("event", "video_generated")
+                    put("surah", surah)
+                    put("startAyah", startAyah)
+                    put("endAyah", endAyah)
+                    put("reciter", reciter)
+                    put("localVideoUri", videoUri.toString())
+                    
+                    val metaJson = JSONObject().apply {
+                        if (metaResult != null) {
+                            metaResult.tiktok?.let {
+                                put("tiktok", JSONObject().apply {
+                                    put("title", it.title)
+                                    put("description", it.description)
+                                    put("hashtags", it.hashtags)
+                                })
+                            }
+                            metaResult.instagram?.let {
+                                put("instagram", JSONObject().apply {
+                                    put("title", it.title)
+                                    put("description", it.description)
+                                    put("hashtags", it.hashtags)
+                                })
+                            }
+                            metaResult.facebook?.let {
+                                put("facebook", JSONObject().apply {
+                                    put("title", it.title)
+                                    put("description", it.description)
+                                    put("hashtags", it.hashtags)
+                                })
+                            }
+                            metaResult.youtube?.let {
+                                put("youtube", JSONObject().apply {
+                                    put("title", it.title)
+                                    put("description", it.description)
+                                    put("hashtags", it.hashtags)
+                                })
+                            }
+                        }
+                    }
+                    put("geminiMetadata", metaJson)
+
+                    val tokensJson = JSONObject().apply {
+                        put("tiktokToken", tiktokToken)
+                        put("instagramToken", instagramToken)
+                        put("facebookToken", facebookToken)
+                        put("youtubeToken", youtubeToken)
+                    }
+                    put("apiTokens", tokensJson)
+                }
+
+                val requestBody = json.toString().toRequestBody("application/json".toMediaType())
+                val request = Request.Builder()
+                    .url(webhookUrl)
+                    .post(requestBody)
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    android.util.Log.d("Webhook", "Webhook execution completed with code: ${response.code}")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.util.Log.e("Webhook", "Webhook execution failed: ${e.message}")
+            }
+        }
     }
 }

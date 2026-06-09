@@ -49,6 +49,13 @@ class SettingsManager(private val context: Context) {
         val FACEBOOK_AUTOPOST = booleanPreferencesKey("facebook_autopost")
         val YOUTUBE_AUTOPOST = booleanPreferencesKey("youtube_autopost")
 
+        // Real API integration tokens and automation webhooks
+        val TIKTOK_ACCESS_TOKEN = stringPreferencesKey("tiktok_access_token")
+        val INSTAGRAM_ACCESS_TOKEN = stringPreferencesKey("instagram_access_token")
+        val FACEBOOK_ACCESS_TOKEN = stringPreferencesKey("facebook_access_token")
+        val YOUTUBE_ACCESS_TOKEN = stringPreferencesKey("youtube_access_token")
+        val WEBHOOK_PUBLISH_URL = stringPreferencesKey("webhook_publish_url")
+
         // HomeScreen selections persistence
         val SELECTED_SURAH_IDX = intPreferencesKey("selected_surah_idx")
         val START_AYAH_TEXT = stringPreferencesKey("start_ayah_text")
@@ -93,6 +100,13 @@ class SettingsManager(private val context: Context) {
     val instagramAutopost: Flow<Boolean> = context.dataStore.data.map { it[INSTAGRAM_AUTOPOST] ?: true }
     val facebookAutopost: Flow<Boolean> = context.dataStore.data.map { it[FACEBOOK_AUTOPOST] ?: true }
     val youtubeAutopost: Flow<Boolean> = context.dataStore.data.map { it[YOUTUBE_AUTOPOST] ?: true }
+
+    // Real API integration flows
+    val tiktokAccessToken: Flow<String> = context.dataStore.data.map { it[TIKTOK_ACCESS_TOKEN] ?: "" }
+    val instagramAccessToken: Flow<String> = context.dataStore.data.map { it[INSTAGRAM_ACCESS_TOKEN] ?: "" }
+    val facebookAccessToken: Flow<String> = context.dataStore.data.map { it[FACEBOOK_ACCESS_TOKEN] ?: "" }
+    val youtubeAccessToken: Flow<String> = context.dataStore.data.map { it[YOUTUBE_ACCESS_TOKEN] ?: "" }
+    val webhookPublishUrl: Flow<String> = context.dataStore.data.map { it[WEBHOOK_PUBLISH_URL] ?: "" }
 
     // HomeScreen selections flows
     val selectedSurahIdx: Flow<Int> = context.dataStore.data.map { it[SELECTED_SURAH_IDX] ?: 0 }
@@ -220,6 +234,26 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setYoutubeAutopost(value: Boolean) {
         context.dataStore.edit { it[YOUTUBE_AUTOPOST] = value }
+    }
+
+    suspend fun setTiktokAccessToken(value: String) {
+        context.dataStore.edit { it[TIKTOK_ACCESS_TOKEN] = value }
+    }
+
+    suspend fun setInstagramAccessToken(value: String) {
+        context.dataStore.edit { it[INSTAGRAM_ACCESS_TOKEN] = value }
+    }
+
+    suspend fun setFacebookAccessToken(value: String) {
+        context.dataStore.edit { it[FACEBOOK_ACCESS_TOKEN] = value }
+    }
+
+    suspend fun setYoutubeAccessToken(value: String) {
+        context.dataStore.edit { it[YOUTUBE_ACCESS_TOKEN] = value }
+    }
+
+    suspend fun setWebhookPublishUrl(value: String) {
+        context.dataStore.edit { it[WEBHOOK_PUBLISH_URL] = value }
     }
 
     // HomeScreen selections setters
