@@ -104,8 +104,17 @@ class VideoGenerator {
             if (pexelsApiKey.isNotBlank()) {
                 onProgress(if (isArabic) "جاري البحث عن مشاهد إسلامية سينمائية (Pexels)..." else "Searching for cinematic movie scenes (Pexels)...", 0.05f)
                 try {
+                    val pexelsQueries = listOf(
+                        "dark+aesthetic+space+particles",
+                        "luxury+glowing+dust+particles",
+                        "slow+particles+dark+abstract",
+                        "cosmic+nebula+stars+ambient",
+                        "dark+smoke+flowing+minimalist"
+                    )
+                    val chosenQuery = pexelsQueries.random()
+                    val requestUrl = "https://api.pexels.com/videos/search?query=$chosenQuery&orientation=portrait&per_page=15"
                     val request = Request.Builder()
-                        .url("https://api.pexels.com/videos/search?query=scenic+night+stars+nature+peaceful&orientation=portrait&per_page=15")
+                        .url(requestUrl)
                         .addHeader("Authorization", pexelsApiKey)
                         .build()
                     val response = client.newCall(request).execute()
@@ -167,8 +176,16 @@ class VideoGenerator {
             if (!videoLoaded && pixabayApiKey.isNotBlank()) {
                 onProgress(if (isArabic) "جاري البحث عن مشاهد إسلامية سينمائية (Pixabay)..." else "Searching for cinematic movie scenes (Pixabay)...", 0.05f)
                 try {
+                    val pixabayQueries = listOf(
+                        "dark+particles+cinematic",
+                        "starry+glowing+dust+ambient",
+                        "nebula+galaxy+dark",
+                        "space+dark+abstract+glowing",
+                        "smoke+slow+motion+dark"
+                    )
+                    val chosenPixabayQuery = pixabayQueries.random()
                     val request = Request.Builder()
-                        .url("https://pixabay.com/api/videos/?key=$pixabayApiKey&q=stars+night+nature+peaceful&orientation=vertical&per_page=15")
+                        .url("https://pixabay.com/api/videos/?key=$pixabayApiKey&q=$chosenPixabayQuery&orientation=vertical&per_page=15")
                         .build()
                     val response = client.newCall(request).execute()
                     if (response.isSuccessful) {
@@ -765,7 +782,14 @@ class VideoGenerator {
         
         if (chunks.isEmpty()) return text
         
-        val chunkIdx = ((currentFrame.toFloat() / totalFrames.toFloat()) * chunks.size).toInt().coerceIn(0, chunks.size - 1)
+        // Reciter finishes chanting original words roughly in the first 78% of the block
+        // Echo and breathing rest for the remaining 22%. Sync words precisely here.
+        val activeFramesRange = (totalFrames * 0.78f).toInt().coerceAtLeast(1)
+        val chunkIdx = if (currentFrame < activeFramesRange) {
+            ((currentFrame.toFloat() / activeFramesRange.toFloat()) * chunks.size).toInt().coerceIn(0, chunks.size - 1)
+        } else {
+            chunks.size - 1
+        }
         return chunks[chunkIdx]
     }
 
@@ -797,7 +821,13 @@ class VideoGenerator {
             tIdx += wordsPerTransChunk
         }
         
-        val chunkIdx = ((currentFrame.toFloat() / totalFrames.toFloat()) * quranChunksCount).toInt().coerceIn(0, quranChunksCount - 1)
+        val activeFramesRange = (totalFrames * 0.78f).toInt().coerceAtLeast(1)
+        val chunkIdx = if (currentFrame < activeFramesRange) {
+            ((currentFrame.toFloat() / activeFramesRange.toFloat()) * quranChunksCount).toInt().coerceIn(0, quranChunksCount - 1)
+        } else {
+            quranChunksCount - 1
+        }
+        
         if (chunkIdx < transChunks.size) {
             return transChunks[chunkIdx]
         }

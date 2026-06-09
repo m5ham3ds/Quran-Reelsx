@@ -17,6 +17,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.MultipartBody
 import org.json.JSONObject
 
 sealed class ReelState {
@@ -234,6 +235,17 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val app = getApplication<Application>()
+                var fileBytes: ByteArray? = null
+                try {
+                    app.contentResolver.openInputStream(videoUri)?.use { input ->
+                        fileBytes = input.readBytes()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    android.util.Log.e("Webhook", "Could not read video file bytes: ${e.message}")
+                }
+
                 val json = JSONObject().apply {
                     put("event", "video_generated")
                     put("surah", surah)
@@ -285,7 +297,25 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                     put("apiTokens", tokensJson)
                 }
 
-                val requestBody = json.toString().toRequestBody("application/json".toMediaType())
+                val requestBody = if (fileBytes != null) {
+                    MultipartBody.Builder()
+                        .setType(MultipartBody.FORM)
+                        .addFormDataPart("event", "video_generated")
+                        .addFormDataPart("surah", surah.toString())
+                        .addFormDataPart("startAyah", startAyah.toString())
+                        .addFormDataPart("endAyah", endAyah.toString())
+                        .addFormDataPart("reciter", reciter)
+                        .addFormDataPart("payload", json.toString())
+                        .addFormDataPart(
+                            "video",
+                            "quran_reel_${System.currentTimeMillis()}.mp4",
+                            fileBytes!!.toRequestBody("video/mp4".toMediaType())
+                        )
+                        .build()
+                } else {
+                    json.toString().toRequestBody("application/json".toMediaType())
+                }
+
                 val request = Request.Builder()
                     .url(webhookUrl)
                     .post(requestBody)
