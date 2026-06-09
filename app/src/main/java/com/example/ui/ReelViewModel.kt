@@ -64,6 +64,7 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                         val isInstagram = settingsManager.instagramLinked.first() && settingsManager.instagramAutopost.first()
                         val isFacebook = settingsManager.facebookLinked.first() && settingsManager.facebookAutopost.first()
                         val isYoutube = settingsManager.youtubeLinked.first() && settingsManager.youtubeAutopost.first()
+                        val isGoogle = settingsManager.googleDriveSheetsLinked.first() && settingsManager.googleAutoSaveEnabled.first()
 
                         val tiktokToken = settingsManager.tiktokAccessToken.first()
                         val instagramToken = settingsManager.instagramAccessToken.first()
@@ -71,7 +72,7 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                         val youtubeToken = settingsManager.youtubeAccessToken.first()
                         val webhookUrl = settingsManager.webhookPublishUrl.first()
 
-                        val hasAnyAutopost = isTiktok || isInstagram || isFacebook || isYoutube || webhookUrl.isNotBlank()
+                        val hasAnyAutopost = isTiktok || isInstagram || isFacebook || isYoutube || webhookUrl.isNotBlank() || isGoogle
 
                         if (hasAnyAutopost) {
                             val isArabic = settingsManager.language.first() == "ar"
@@ -97,6 +98,40 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                                 isYoutube = isYoutube
                             )
 
+                            // If direct Google Drive & Sheets integration is enabled
+                            var googleDriveLink: String? = null
+                            if (isGoogle) {
+                                try {
+                                    val tempFile = java.io.File(app.cacheDir, "temp_google_upload_${System.currentTimeMillis()}.mp4")
+                                    app.contentResolver.openInputStream(state.uri)?.use { input ->
+                                        tempFile.outputStream().use { output ->
+                                            input.copyTo(output)
+                                        }
+                                    }
+                                    
+                                    val descriptionText = meta?.tiktok?.description 
+                                        ?: meta?.instagram?.description 
+                                        ?: "Quran Reel - Surah $surahName Ayat $currentStartAyah-$currentEndAyah"
+
+                                    val googlePublisher = com.example.generator.GoogleDriveSheetsPublisher(app)
+                                    val res = googlePublisher.publishReel(
+                                        videoFile = tempFile,
+                                        surahName = surahName,
+                                        ayahRange = "$currentStartAyah-$currentEndAyah",
+                                        reciterName = reciterName,
+                                        description = descriptionText
+                                    )
+                                    if (res != null) {
+                                        googleDriveLink = res.first
+                                        android.util.Log.d("GooglePublisher", "Direct Google Publisher succeeded! Link: $googleDriveLink")
+                                    }
+                                    try { tempFile.delete() } catch (ex: Exception) {}
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                    android.util.Log.e("GooglePublisher", "Direct Google Publisher failed: ${e.message}")
+                                }
+                            }
+
                             // If a real Webhook is configured, dispatch the video and data to it
                             if (webhookUrl.isNotBlank()) {
                                 dispatchWebhook(
@@ -121,7 +156,8 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                                     "tiktok" to isTiktok,
                                     "instagram" to isInstagram,
                                     "facebook" to isFacebook,
-                                    "youtube" to isYoutube
+                                    "youtube" to isYoutube,
+                                    "google_drive" to (googleDriveLink != null)
                                 )
                             )
                         } else {

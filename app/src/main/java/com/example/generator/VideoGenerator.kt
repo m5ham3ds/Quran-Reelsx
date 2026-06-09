@@ -815,9 +815,9 @@ class VideoGenerator {
         try { if (muxerStarted) muxer.stop(); muxer.release() } catch (e: Exception) {}
         try { extractor.release() } catch (e: Exception) {}
 
-        // Smooth energy with noise-gate threshold
+        // Smooth energy with noise-gate threshold - lowered to 0.02f for maximum syllables tracking
         val peak = rawEnergySamples.maxOfOrNull { it.second } ?: 1f
-        val gateThreshold = peak * 0.08f
+        val gateThreshold = peak * 0.02f
         return rawEnergySamples.map { (time, energy) ->
             val gatedEnergy = if (energy > gateThreshold) energy - gateThreshold else 0f
             Pair(time, gatedEnergy)

@@ -56,6 +56,14 @@ class SettingsManager(private val context: Context) {
         val YOUTUBE_ACCESS_TOKEN = stringPreferencesKey("youtube_access_token")
         val WEBHOOK_PUBLISH_URL = stringPreferencesKey("webhook_publish_url")
 
+        // Google Drive & Sheets preferences keys
+        val GOOGLE_DRIVE_SHEETS_LINKED = booleanPreferencesKey("google_drive_sheets_linked")
+        val GOOGLE_ACCOUNT_EMAIL = stringPreferencesKey("google_account_email")
+        val GOOGLE_DRIVE_FOLDER_ID = stringPreferencesKey("google_drive_folder_id")
+        val GOOGLE_SPREADSHEET_ID = stringPreferencesKey("google_spreadsheet_id")
+        val GOOGLE_OAUTH_ACCESS_TOKEN = stringPreferencesKey("google_oauth_access_token")
+        val GOOGLE_AUTO_SAVE_ENABLED = booleanPreferencesKey("google_auto_save_enabled")
+
         // HomeScreen selections persistence
         val SELECTED_SURAH_IDX = intPreferencesKey("selected_surah_idx")
         val START_AYAH_TEXT = stringPreferencesKey("start_ayah_text")
@@ -107,6 +115,14 @@ class SettingsManager(private val context: Context) {
     val facebookAccessToken: Flow<String> = context.dataStore.data.map { it[FACEBOOK_ACCESS_TOKEN] ?: "" }
     val youtubeAccessToken: Flow<String> = context.dataStore.data.map { it[YOUTUBE_ACCESS_TOKEN] ?: "" }
     val webhookPublishUrl: Flow<String> = context.dataStore.data.map { it[WEBHOOK_PUBLISH_URL] ?: "" }
+
+    // Google Drive & Sheets flow accessors
+    val googleDriveSheetsLinked: Flow<Boolean> = context.dataStore.data.map { it[GOOGLE_DRIVE_SHEETS_LINKED] ?: false }
+    val googleAccountEmail: Flow<String> = context.dataStore.data.map { it[GOOGLE_ACCOUNT_EMAIL] ?: "" }
+    val googleDriveFolderId: Flow<String> = context.dataStore.data.map { it[GOOGLE_DRIVE_FOLDER_ID] ?: "" }
+    val googleSpreadsheetId: Flow<String> = context.dataStore.data.map { it[GOOGLE_SPREADSHEET_ID] ?: "" }
+    val googleOauthAccessToken: Flow<String> = context.dataStore.data.map { it[GOOGLE_OAUTH_ACCESS_TOKEN] ?: "" }
+    val googleAutoSaveEnabled: Flow<Boolean> = context.dataStore.data.map { it[GOOGLE_AUTO_SAVE_ENABLED] ?: true }
 
     // HomeScreen selections flows
     val selectedSurahIdx: Flow<Int> = context.dataStore.data.map { it[SELECTED_SURAH_IDX] ?: 0 }
@@ -254,6 +270,31 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setWebhookPublishUrl(value: String) {
         context.dataStore.edit { it[WEBHOOK_PUBLISH_URL] = value }
+    }
+
+    // Google Drive & Sheets setters
+    suspend fun setGoogleDriveSheetsLinked(value: Boolean) {
+        context.dataStore.edit { it[GOOGLE_DRIVE_SHEETS_LINKED] = value }
+    }
+
+    suspend fun setGoogleAccountEmail(value: String) {
+        context.dataStore.edit { it[GOOGLE_ACCOUNT_EMAIL] = value }
+    }
+
+    suspend fun setGoogleDriveFolderId(value: String) {
+        context.dataStore.edit { it[GOOGLE_DRIVE_FOLDER_ID] = value }
+    }
+
+    suspend fun setGoogleSpreadsheetId(value: String) {
+        context.dataStore.edit { it[GOOGLE_SPREADSHEET_ID] = value }
+    }
+
+    suspend fun setGoogleOauthAccessToken(value: String) {
+        context.dataStore.edit { it[GOOGLE_OAUTH_ACCESS_TOKEN] = value }
+    }
+
+    suspend fun setGoogleAutoSaveEnabled(value: Boolean) {
+        context.dataStore.edit { it[GOOGLE_AUTO_SAVE_ENABLED] = value }
     }
 
     // HomeScreen selections setters
