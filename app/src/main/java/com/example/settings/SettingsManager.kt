@@ -47,6 +47,12 @@ class SettingsManager(private val context: Context) {
         val INSTAGRAM_AUTOPOST = booleanPreferencesKey("instagram_autopost")
         val FACEBOOK_AUTOPOST = booleanPreferencesKey("facebook_autopost")
         val YOUTUBE_AUTOPOST = booleanPreferencesKey("youtube_autopost")
+
+        // HomeScreen selections persistence
+        val SELECTED_SURAH_IDX = intPreferencesKey("selected_surah_idx")
+        val START_AYAH_TEXT = stringPreferencesKey("start_ayah_text")
+        val END_AYAH_TEXT = stringPreferencesKey("end_ayah_text")
+        val SELECTED_RECITER_ID = stringPreferencesKey("selected_reciter_id")
     }
 
     val pexelsApiKey: Flow<String> = context.dataStore.data.map { it[PEXELS_API_KEY] ?: "" }
@@ -85,6 +91,12 @@ class SettingsManager(private val context: Context) {
     val instagramAutopost: Flow<Boolean> = context.dataStore.data.map { it[INSTAGRAM_AUTOPOST] ?: true }
     val facebookAutopost: Flow<Boolean> = context.dataStore.data.map { it[FACEBOOK_AUTOPOST] ?: true }
     val youtubeAutopost: Flow<Boolean> = context.dataStore.data.map { it[YOUTUBE_AUTOPOST] ?: true }
+
+    // HomeScreen selections flows
+    val selectedSurahIdx: Flow<Int> = context.dataStore.data.map { it[SELECTED_SURAH_IDX] ?: 0 }
+    val startAyahText: Flow<String> = context.dataStore.data.map { it[START_AYAH_TEXT] ?: "1" }
+    val endAyahText: Flow<String> = context.dataStore.data.map { it[END_AYAH_TEXT] ?: "5" }
+    val selectedReciterId: Flow<String> = context.dataStore.data.map { it[SELECTED_RECITER_ID] ?: "ar.alafasy" }
 
     suspend fun savePexelsKey(key: String) {
         context.dataStore.edit { it[PEXELS_API_KEY] = key }
@@ -202,5 +214,22 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setYoutubeAutopost(value: Boolean) {
         context.dataStore.edit { it[YOUTUBE_AUTOPOST] = value }
+    }
+
+    // HomeScreen selections setters
+    suspend fun setSelectedSurahIdx(value: Int) {
+        context.dataStore.edit { it[SELECTED_SURAH_IDX] = value }
+    }
+
+    suspend fun setStartAyahText(value: String) {
+        context.dataStore.edit { it[START_AYAH_TEXT] = value }
+    }
+
+    suspend fun setEndAyahText(value: String) {
+        context.dataStore.edit { it[END_AYAH_TEXT] = value }
+    }
+
+    suspend fun setSelectedReciterId(value: String) {
+        context.dataStore.edit { it[SELECTED_RECITER_ID] = value }
     }
 }

@@ -180,7 +180,7 @@ fun MainNavigationScaffold(
                 .padding(innerPadding)
         ) {
             when (selectedTab) {
-                "home" -> HomeScreen(viewModel = viewModel, isArabic = isArabic)
+                "home" -> HomeScreen(viewModel = viewModel, isArabic = isArabic, settingsManager = settingsManager)
                 "font" -> FontFormattingScreen(settingsManager = settingsManager, isArabic = isArabic)
                 "social" -> SocialMediaScreen(isArabic = isArabic)
                 "settings" -> SettingsScreen(onNavigateBack = { selectedTab = "home" })
@@ -191,8 +191,9 @@ fun MainNavigationScaffold(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean) {
+fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: SettingsManager) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val state by viewModel.uiState.collectAsState()
     val recitersList by viewModel.reciters.collectAsState()
 
@@ -204,6 +205,36 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean) {
     var startAyahText by remember { mutableStateOf("1") }
     var endAyahText by remember { mutableStateOf("5") }
     var selectedReciterIdx by remember { mutableIntStateOf(0) }
+
+    // Load initial values from settings on start
+    val savedSurahIdx by settingsManager.selectedSurahIdx.collectAsState(initial = -1)
+    val savedStartAyah by settingsManager.startAyahText.collectAsState(initial = "")
+    val savedEndAyah by settingsManager.endAyahText.collectAsState(initial = "")
+    val savedReciterId by settingsManager.selectedReciterId.collectAsState(initial = "")
+
+    LaunchedEffect(savedSurahIdx) {
+        if (savedSurahIdx >= 0) {
+            selectedSurahIdx = savedSurahIdx
+        }
+    }
+    LaunchedEffect(savedStartAyah) {
+        if (savedStartAyah.isNotEmpty()) {
+            startAyahText = savedStartAyah
+        }
+    }
+    LaunchedEffect(savedEndAyah) {
+        if (savedEndAyah.isNotEmpty()) {
+            endAyahText = savedEndAyah
+        }
+    }
+    LaunchedEffect(savedReciterId, recitersList) {
+        if (savedReciterId.isNotEmpty() && recitersList.isNotEmpty()) {
+            val idx = recitersList.indexOfFirst { it.first == savedReciterId }
+            if (idx >= 0) {
+                selectedReciterIdx = idx
+            }
+        }
+    }
 
     var surahExpanded by remember { mutableStateOf(false) }
     var reciterExpanded by remember { mutableStateOf(false) }
@@ -301,7 +332,13 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean) {
                                         // Reset bounds when surah changes
                                         startAyahText = "1"
                                         val max = SURAH_COUNTS[index + 1] ?: 1
-                                        endAyahText = if (max >= 5) "5" else max.toString()
+                                        val initialEndStr = if (max >= 5) "5" else max.toString()
+                                        endAyahText = initialEndStr
+                                        scope.launch {
+                                            settingsManager.setSelectedSurahIdx(index)
+                                            settingsManager.setStartAyahText("1")
+                                            settingsManager.setEndAyahText(initialEndStr)
+                                        }
                                     }
                                 )
                             }
@@ -317,7 +354,12 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean) {
                             Text(if (isArabic) "من الآية" else "From Ayah", color = TextMutedColor, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
                             OutlinedTextField(
                                 value = startAyahText,
-                                onValueChange = { startAyahText = it },
+                                onValueChange = { 
+                                    startAyahText = it
+                                    scope.launch {
+                                        settingsManager.setStartAyahText(it)
+                                    }
+                                },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = TextSoftColor,
@@ -337,7 +379,12 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean) {
                             Text(if (isArabic) "إلى الآية" else "To Ayah", color = TextMutedColor, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
                             OutlinedTextField(
                                 value = endAyahText,
-                                onValueChange = { endAyahText = it },
+                                onValueChange = { 
+                                    endAyahText = it
+                                    scope.launch {
+                                        settingsManager.setEndAyahText(it)
+                                    }
+                                },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = TextSoftColor,
@@ -391,6 +438,9 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean) {
                                     onClick = {
                                         selectedReciterIdx = index
                                         reciterExpanded = false
+                                        scope.launch {
+                                            settingsManager.setSelectedReciterId(reciter.first)
+                                        }
                                     }
                                 )
                             }
@@ -527,14 +577,17 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean) {
                                     textAlign = TextAlign.Center
                                 )
 
-                                var exoPlayer: ExoPlayer? by remember { mutableStateOf(null) }
-                                DisposableEffect(uri) {
-                                    val player = ExoPlayer.Builder(context).build().apply {
+                                val exoPlayer = remember(uri) {
+                                    ExoPlayer.Builder(context).build().apply {
                                         setMediaItem(MediaItem.fromUri(uri))
                                         prepare()
+                                        playWhenReady = true
                                     }
-                                    exoPlayer = player
-                                    onDispose { player.release() }
+                                }
+                                DisposableEffect(exoPlayer) {
+                                    onDispose {
+                                        exoPlayer.release()
+                                    }
                                 }
 
                                 AndroidView(
@@ -543,6 +596,9 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean) {
                                             player = exoPlayer
                                             useController = true
                                         }
+                                    },
+                                    update = { view ->
+                                        view.player = exoPlayer
                                     },
                                     modifier = Modifier
                                         .fillMaxWidth()

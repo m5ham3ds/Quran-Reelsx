@@ -384,30 +384,57 @@ class VideoGenerator {
                 if (customDir.exists()) {
                     val targetFile = File(customDir, "Quran_Reel_${System.currentTimeMillis()}.mp4")
                     File(outputPath).copyTo(targetFile, overwrite = true)
-                    File(outputPath).delete()
+                    
+                    // Crucial: Scan file so it is indexed in the system media database & instantly visible in standard players/gallery!
+                    android.media.MediaScannerConnection.scanFile(
+                        context,
+                        arrayOf(targetFile.absolutePath),
+                        arrayOf("video/mp4"),
+                        null
+                    )
+                    
                     uri = Uri.fromFile(targetFile)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
             
-            // 2. Fallback to standard MediaStore registration if Scoped Storage blocks raw file creation
+            // 2. Fallback to standard MediaStore registration if Scoped Storage blocks raw file creation (this is 100% reliable on Android 10+ and places it in Movies directory)
             if (uri == null) {
-                val values = ContentValues().apply {
-                    put(MediaStore.Video.Media.DISPLAY_NAME, "Quran_Reel_${System.currentTimeMillis()}.mp4")
-                    put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                    put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/Quran Reels")
-                }
-                val mUri = context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
-                if (mUri != null) {
-                    context.contentResolver.openOutputStream(mUri)?.use { out ->
-                        File(outputPath).inputStream().use { input ->
-                            input.copyTo(out)
+                try {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Video.Media.DISPLAY_NAME, "Quran_Reel_${System.currentTimeMillis()}.mp4")
+                        put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                        put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/Quran Reels")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            put(MediaStore.Video.Media.IS_PENDING, 1)
                         }
                     }
-                    File(outputPath).delete()
-                    uri = mUri
+                    val mUri = context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+                    if (mUri != null) {
+                        context.contentResolver.openOutputStream(mUri)?.use { out ->
+                            File(outputPath).inputStream().use { input ->
+                                input.copyTo(out)
+                            }
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            values.clear()
+                            values.put(MediaStore.Video.Media.IS_PENDING, 0)
+                            context.contentResolver.update(mUri, values, null, null)
+                        }
+                        uri = mUri
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
+            }
+            
+            // 3. Absolute Fallback to Internal Cache to prevent failures (guarantees we always have a valid URI)
+            if (uri == null) {
+                uri = Uri.fromFile(File(outputPath))
+            } else {
+                // Delete temporary internal file after successful copy
+                try { File(outputPath).delete() } catch (ex: Exception) {}
             }
             
             val finalUri = uri

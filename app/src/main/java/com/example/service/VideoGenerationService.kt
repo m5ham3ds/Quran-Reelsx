@@ -101,6 +101,8 @@ class VideoGenerationService : Service() {
         return START_NOT_STICKY
     }
 
+    private val completedChannelId = "video_completed_channel"
+
     private fun startForegroundServiceState(startAyah: Int, endAyah: Int, isArabic: Boolean) {
         val title = if (isArabic) "جاري تصميم مقطع ريلز القرآن..." else "Designing Quran Reel..."
         val desc = if (isArabic) "جاري معالجة الآيات من $startAyah إلى $endAyah" else "Processing verses $startAyah to $endAyah"
@@ -118,6 +120,7 @@ class VideoGenerationService : Service() {
             .setContentTitle(title)
             .setContentText(desc)
             .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setColor(0xFFD29E57.toInt()) // Beautiful Luxury Gold accent
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(appPendingIntent)
@@ -146,6 +149,7 @@ class VideoGenerationService : Service() {
             .setContentTitle(title)
             .setContentText(message)
             .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setColor(0xFFD29E57.toInt())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(appPendingIntent)
@@ -169,13 +173,37 @@ class VideoGenerationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, channelId)
+        // Build intent to share video directly from shade
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "video/mp4"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val sharePendingIntent = PendingIntent.getActivity(
+            this, 13, Intent.createChooser(shareIntent, if (isArabic) "مشاركة المقطع" else "Share Reel"),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, completedChannelId)
             .setContentTitle(title)
             .setContentText(desc)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setColor(0xFFD29E57.toInt())
             .setOngoing(false)
             .setAutoCancel(true)
             .setContentIntent(playPendingIntent)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(
+                android.R.drawable.ic_media_play,
+                if (isArabic) "تشغيل الفيديو" else "Play Video",
+                playPendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_share,
+                if (isArabic) "مشاركة" else "Share",
+                sharePendingIntent
+            )
             .build()
 
         notificationManager.notify(notificationId + 1, notification)
@@ -192,10 +220,11 @@ class VideoGenerationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(this, channelId)
+        val notification = NotificationCompat.Builder(this, completedChannelId)
             .setContentTitle(title)
             .setContentText(error)
             .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setColor(0xFFF44336.toInt()) // Red color accent for errors
             .setOngoing(false)
             .setAutoCancel(true)
             .setContentIntent(appPendingIntent)
@@ -208,12 +237,27 @@ class VideoGenerationService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
-                "إنشاء ريلز القرآن",
+                "جاري معالجة مقاطع الريلز",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "قناة إشعارات جاري معالجة فيديو ريلز القرآن الكريم"
+                setShowBadge(false)
             }
+            
+            val completedChannel = NotificationChannel(
+                completedChannelId,
+                "تنبيهات اكتمال ريلز القرآن",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "تنبيهات واشعار اكتمال تصميم فيديو ريلز القرآن الكريم"
+                enableLights(true)
+                lightColor = 0xFFD29E57.toInt()
+                enableVibration(true)
+                setShowBadge(true)
+            }
+            
             notificationManager.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(completedChannel)
         }
     }
 
