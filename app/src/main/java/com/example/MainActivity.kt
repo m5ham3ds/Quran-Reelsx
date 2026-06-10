@@ -196,6 +196,8 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
     val scope = rememberCoroutineScope()
     val state by viewModel.uiState.collectAsState()
     val recitersList by viewModel.reciters.collectAsState()
+    val isGenerationPaused by viewModel.isGenerationPausedFlow.collectAsState()
+    var showCancelConfirmationDialog by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -573,19 +575,19 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                     Button(
                                         onClick = { viewModel.togglePauseGeneration() },
                                         colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (viewModel.isGenerationPaused()) LuxuryGold else BorderColor,
-                                            contentColor = if (viewModel.isGenerationPaused()) ScreenBg else Color.White
+                                            containerColor = if (isGenerationPaused) LuxuryGold else BorderColor,
+                                            contentColor = if (isGenerationPaused) ScreenBg else Color.White
                                         ),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
                                         Icon(
-                                            imageVector = if (viewModel.isGenerationPaused()) Icons.Default.PlayArrow else Icons.Default.Refresh,
+                                            imageVector = if (isGenerationPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                                             contentDescription = null,
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = if (viewModel.isGenerationPaused()) {
+                                            text = if (isGenerationPaused) {
                                                 if (isArabic) "استئناف" else "Resume"
                                             } else {
                                                 if (isArabic) "إيقاف مؤقت" else "Pause"
@@ -596,7 +598,7 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                     }
                                     
                                     Button(
-                                        onClick = { viewModel.cancelGeneration() },
+                                        onClick = { showCancelConfirmationDialog = true },
                                         colors = ButtonDefaults.buttonColors(
                                             containerColor = Color(0x11EF5350),
                                             contentColor = Color(0xFFEF5350)
@@ -616,6 +618,48 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                             fontWeight = FontWeight.Bold
                                         )
                                     }
+                                }
+
+                                if (showCancelConfirmationDialog) {
+                                    AlertDialog(
+                                        onDismissRequest = { showCancelConfirmationDialog = false },
+                                        title = {
+                                            Text(
+                                                text = if (isArabic) "تأكيد إلغاء العملية" else "Confirm Cancellation",
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        },
+                                        text = {
+                                            Text(
+                                                text = if (isArabic) "هل أنت متأكد من رغبتك في إلغاء عملية تصميم وإنتاج هذا المقطع؟" else "Are you sure you want to cancel the generation of this reel?",
+                                                color = TextSoftColor
+                                            )
+                                        },
+                                        confirmButton = {
+                                             Button(
+                                                 onClick = {
+                                                     showCancelConfirmationDialog = false
+                                                     viewModel.cancelGeneration()
+                                                 },
+                                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350), contentColor = Color.White),
+                                                 shape = RoundedCornerShape(10.dp)
+                                             ) {
+                                                 Text(text = if (isArabic) "نعم، إلغاء" else "Yes, Cancel", fontWeight = FontWeight.Bold)
+                                             }
+                                        },
+                                        dismissButton = {
+                                             Button(
+                                                 onClick = { showCancelConfirmationDialog = false },
+                                                 colors = ButtonDefaults.buttonColors(containerColor = BorderColor, contentColor = TextSoftColor),
+                                                 shape = RoundedCornerShape(10.dp)
+                                             ) {
+                                                 Text(text = if (isArabic) "تراجع" else "Keep Generating", fontWeight = FontWeight.Bold)
+                                             }
+                                        },
+                                        containerColor = ScreenBg,
+                                        shape = RoundedCornerShape(16.dp)
+                                    )
                                 }
                             }
                             is ReelState.Success -> {

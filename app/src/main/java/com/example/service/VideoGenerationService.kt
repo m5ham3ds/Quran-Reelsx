@@ -42,6 +42,22 @@ class VideoGenerationService : Service() {
             return START_NOT_STICKY
         }
 
+        val action = intent.action
+        if (action == "com.example.action.PAUSE_RESUME") {
+            togglePauseResumed()
+            val language = kotlinx.coroutines.runBlocking {
+                com.example.settings.SettingsManager(this@VideoGenerationService).language.first()
+            }
+            val isArabic = language == "ar"
+            updateNotificationProgress(lastMessage, lastProgress, isArabic)
+            return START_NOT_STICKY
+        } else if (action == "com.example.action.CANCEL") {
+            cancelGeneration()
+            stopForeground(true)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         resetControlFlags()
 
         val surah = intent.getIntExtra("surah", 1)
@@ -107,7 +123,8 @@ class VideoGenerationService : Service() {
 
     private fun startForegroundServiceState(startAyah: Int, endAyah: Int, isArabic: Boolean) {
         val title = if (isArabic) "جاري تصميم مقطع ريلز القرآن..." else "Designing Quran Reel..."
-        val desc = if (isArabic) "جاري معالجة الآيات من $startAyah إلى $endAyah" else "Processing verses $startAyah to $endAyah"
+        lastMessage = if (isArabic) "جاري معالجة الآيات من $startAyah إلى $endAyah" else "Processing verses $startAyah to $endAyah"
+        lastProgress = 0f
 
         // Intent to open MainActivity when clicking notification
         val appIntent = Intent(this, MainActivity::class.java).apply {
@@ -118,15 +135,40 @@ class VideoGenerationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val pauseIntent = Intent(this, VideoGenerationService::class.java).apply {
+            action = "com.example.action.PAUSE_RESUME"
+        }
+        val pausePendingIntent = PendingIntent.getService(
+            this, 101, pauseIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val cancelIntent = Intent(this, VideoGenerationService::class.java).apply {
+            action = "com.example.action.CANCEL"
+        }
+        val cancelPendingIntent = PendingIntent.getService(
+            this, 102, cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val pauseLabel = if (isPaused) {
+            if (isArabic) "استئناف" else "Resume"
+        } else {
+            if (isArabic) "إيقاف مؤقت" else "Pause"
+        }
+        val pauseIcon = if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
+
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle(title)
-            .setContentText(desc)
+            .setContentText(lastMessage)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setColor(0xFFD29E57.toInt()) // Beautiful Luxury Gold accent
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(appPendingIntent)
             .setProgress(100, 0, false)
+            .addAction(pauseIcon, pauseLabel, pausePendingIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, if (isArabic) "إلغاء المونتاج" else "Cancel", cancelPendingIntent)
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -137,6 +179,9 @@ class VideoGenerationService : Service() {
     }
 
     private fun updateNotificationProgress(message: String, progress: Float, isArabic: Boolean) {
+        lastMessage = message
+        lastProgress = progress
+
         val title = if (isArabic) "جاري تصميم المقطع السينمائي..." else "Reel render active..."
         
         val appIntent = Intent(this, MainActivity::class.java).apply {
@@ -147,6 +192,29 @@ class VideoGenerationService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val pauseIntent = Intent(this, VideoGenerationService::class.java).apply {
+            action = "com.example.action.PAUSE_RESUME"
+        }
+        val pausePendingIntent = PendingIntent.getService(
+            this, 101, pauseIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val cancelIntent = Intent(this, VideoGenerationService::class.java).apply {
+            action = "com.example.action.CANCEL"
+        }
+        val cancelPendingIntent = PendingIntent.getService(
+            this, 102, cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val pauseLabel = if (isPaused) {
+            if (isArabic) "استئناف" else "Resume"
+        } else {
+            if (isArabic) "إيقاف مؤقت" else "Pause"
+        }
+        val pauseIcon = if (isPaused) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause
+
         val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle(title)
             .setContentText(message)
@@ -156,6 +224,8 @@ class VideoGenerationService : Service() {
             .setOnlyAlertOnce(true)
             .setContentIntent(appPendingIntent)
             .setProgress(100, (progress * 100).toInt(), false)
+            .addAction(pauseIcon, pauseLabel, pausePendingIntent)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, if (isArabic) "إلغاء المونتاج" else "Cancel", cancelPendingIntent)
             .build()
 
         notificationManager.notify(notificationId, notification)
@@ -274,6 +344,14 @@ class VideoGenerationService : Service() {
         private val _serviceState = MutableStateFlow<ReelState>(ReelState.Idle)
         val serviceState: StateFlow<ReelState> = _serviceState
 
+        private val _isPausedState = MutableStateFlow(false)
+        val isPausedState: StateFlow<Boolean> = _isPausedState
+
+        @Volatile
+        var lastMessage = ""
+        @Volatile
+        var lastProgress = 0f
+
         @Volatile
         var isPaused = false
         @Volatile
@@ -283,6 +361,7 @@ class VideoGenerationService : Service() {
         fun togglePauseResumed() {
             synchronized(pauseLock) {
                 isPaused = !isPaused
+                _isPausedState.value = isPaused
                 if (!isPaused) {
                     pauseLock.notifyAll()
                 }
@@ -293,6 +372,7 @@ class VideoGenerationService : Service() {
             synchronized(pauseLock) {
                 isCancelled = true
                 isPaused = false
+                _isPausedState.value = false
                 pauseLock.notifyAll()
             }
             _serviceState.value = ReelState.Idle
@@ -302,6 +382,7 @@ class VideoGenerationService : Service() {
             synchronized(pauseLock) {
                 isPaused = false
                 isCancelled = false
+                _isPausedState.value = false
                 pauseLock.notifyAll()
             }
         }

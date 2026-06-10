@@ -264,6 +264,8 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = ReelState.Idle
     }
 
+    val isGenerationPausedFlow = VideoGenerationService.isPausedState
+
     fun isGenerationPaused(): Boolean {
         return VideoGenerationService.isPaused
     }

@@ -111,11 +111,12 @@ class VideoGenerator {
                 onProgress(if (isArabic) "جاري البحث عن مناظر طبيعية سينمائية خلابة (Pexels)..." else "Searching for breathtaking nature landscapes (Pexels)...", 0.05f)
                 try {
                     val pexelsQueries = listOf(
-                        "scenic+nature+landscape",
-                        "breathtaking+mountains+forest",
-                        "peaceful+nature+river+sunset",
-                        "calming+ocean+aerial+view",
-                        "majestic+waterfall+serene+clouds"
+                        "epic+drone+mountains+scenic",
+                        "breathtaking+green+hills+aerial",
+                        "towering+peaks+drone+landscape",
+                        "serene+majestic+mountains+drone",
+                        "peaceful+aerial+green+hills",
+                        "luxurious+misty+mountain+forests"
                     )
                     val chosenQuery = pexelsQueries.random()
                     val requestUrl = "https://api.pexels.com/videos/search?query=$chosenQuery&orientation=portrait&per_page=15"
@@ -183,11 +184,11 @@ class VideoGenerator {
                 onProgress(if (isArabic) "جاري البحث عن مناظر طبيعية سينمائية هادئة (Pixabay)..." else "Searching for peaceful nature landscapes (Pixabay)...", 0.05f)
                 try {
                     val pixabayQueries = listOf(
-                        "scenic+nature+landscape",
-                        "breathtaking+mountains+forest",
-                        "peaceful+nature+river+sunset",
-                        "calming+ocean+aerial+view",
-                        "majestic+waterfall"
+                        "drone+mountains+scenic",
+                        "aerial+green+hills",
+                        "epic+nature+peaks+drone",
+                        "peaceful+green+valleys",
+                        "beautiful+aerial+forests"
                     )
                     val chosenPixabayQuery = pixabayQueries.random()
                     val request = Request.Builder()
@@ -429,18 +430,12 @@ class VideoGenerator {
             for ((idx, verse) in verses.withIndex()) {
                 onProgress(if (isArabic) "جاري تصوير مشهدي الآية ${startAyah + idx}..." else "Rendering scenes for Ayah ${startAyah + idx}...", 0.5f + (idx * 0.4f / verses.size))
                 
-                var verseRetriever: MediaMetadataRetriever? = null
-                var verseVideoDurationUs = 10_000_000L
+                var frameDecoder: SequentialFrameDecoder? = null
                 if (videoLoaded && downloadedVideoFiles.isNotEmpty()) {
                     try {
                         val videoFile = downloadedVideoFiles[idx % downloadedVideoFiles.size]
                         if (videoFile.exists()) {
-                            verseRetriever = MediaMetadataRetriever().apply {
-                                setDataSource(videoFile.absolutePath)
-                            }
-                            val durStr = verseRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                            val durMs = durStr?.toLongOrNull() ?: 10000L
-                            verseVideoDurationUs = durMs * 1000L
+                            frameDecoder = SequentialFrameDecoder(videoFile.absolutePath)
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
@@ -456,14 +451,9 @@ class VideoGenerator {
                     }
                     
                     var bgFrameBitmap: Bitmap? = null
-                    if (verseRetriever != null) {
+                    if (frameDecoder != null) {
                         try {
-                            val localTimeUs = (i * frameDurationUs) % verseVideoDurationUs
-                            bgFrameBitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                                verseRetriever.getScaledFrameAtTime(localTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 720, 1280)
-                            } else {
-                                verseRetriever.getFrameAtTime(localTimeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                            }
+                            bgFrameBitmap = frameDecoder.getNextFrame()
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
@@ -510,7 +500,7 @@ class VideoGenerator {
                     bgFrameBitmap?.recycle()
                 }
                 
-                try { verseRetriever?.release() } catch (ex: Exception) {}
+                try { frameDecoder?.release() } catch (ex: Exception) {}
             }
             
             var eosIdx = -1
@@ -1228,3 +1218,161 @@ class VideoGenerator {
         }
     }
 }
+
+class SequentialFrameDecoder(private val videoPath: String) {
+    private var extractor: MediaExtractor? = null
+    private var decoder: MediaCodec? = null
+    private var width = 720
+    private var height = 1280
+    private var trackIndex = -1
+    private val bufferInfo = MediaCodec.BufferInfo()
+    private var isEOS = false
+
+    init {
+        try {
+            val ext = MediaExtractor()
+            ext.setDataSource(videoPath)
+            extractor = ext
+            for (i in 0 until ext.trackCount) {
+                val format = ext.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("video/")) {
+                    ext.selectTrack(i)
+                    trackIndex = i
+                    width = format.getInteger(MediaFormat.KEY_WIDTH)
+                    height = format.getInteger(MediaFormat.KEY_HEIGHT)
+                    
+                    val dec = MediaCodec.createDecoderByType(mime)
+                    format.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
+                    dec.configure(format, null, null, 0)
+                    dec.start()
+                    decoder = dec
+                    break
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            release()
+        }
+    }
+
+    fun getNextFrame(): Bitmap? {
+        val dec = decoder ?: return null
+        val ext = extractor ?: return null
+        if (trackIndex == -1) return null
+        
+        val timeoutUs = 5000L
+        var attempts = 0
+        while (attempts < 80) {
+            attempts++
+            try {
+                if (!isEOS) {
+                    val inIdx = dec.dequeueInputBuffer(timeoutUs)
+                    if (inIdx >= 0) {
+                        val buf = dec.getInputBuffer(inIdx)!!
+                        val sampleSize = ext.readSampleData(buf, 0)
+                        if (sampleSize < 0) {
+                            dec.queueInputBuffer(inIdx, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                            isEOS = true
+                        } else {
+                            dec.queueInputBuffer(inIdx, 0, sampleSize, ext.sampleTime, 0)
+                            ext.advance()
+                        }
+                    }
+                }
+
+                val outIdx = dec.dequeueOutputBuffer(bufferInfo, timeoutUs)
+                if (outIdx >= 0) {
+                    var bitmap: Bitmap? = null
+                    try {
+                        val image = dec.getOutputImage(outIdx)
+                        if (image != null) {
+                            bitmap = convertYUVImageToBitmap(image)
+                            image.close()
+                        }
+                    } catch (ex: Exception) {
+                        ex.printStackTrace()
+                    }
+                    dec.releaseOutputBuffer(outIdx, false)
+                    
+                    if (bitmap != null) {
+                        return bitmap
+                    }
+                } else if (outIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    val format = dec.outputFormat
+                    width = format.getInteger(MediaFormat.KEY_WIDTH)
+                    height = format.getInteger(MediaFormat.KEY_HEIGHT)
+                } else if (isEOS && (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                    ext.seekTo(0, MediaExtractor.SEEK_TO_CLOSEST_SYNC)
+                    isEOS = false
+                    dec.flush()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                break
+            }
+        }
+        return null
+    }
+
+    private fun convertYUVImageToBitmap(image: Image): Bitmap {
+        val w = image.width
+        val h = image.height
+        val yPlane = image.planes[0]
+        val uPlane = image.planes[1]
+        val vPlane = image.planes[2]
+        
+        val yBuffer = yPlane.buffer
+        val uBuffer = uPlane.buffer
+        val vBuffer = vPlane.buffer
+        
+        val yRowStride = yPlane.rowStride
+        val uRowStride = uPlane.rowStride
+        val vRowStride = vPlane.rowStride
+        val uPixelStride = uPlane.pixelStride
+        val vPixelStride = vPlane.pixelStride
+        
+        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val pixels = IntArray(w * h)
+        
+        var index = 0
+        for (y in 0 until h) {
+            val yRowStart = y * yRowStride
+            for (x in 0 until w) {
+                val yValue = (yBuffer.get(yRowStart + x).toInt() and 0xff)
+                
+                val uvIndex = (y / 2) * uRowStride + (x / 2) * uPixelStride
+                val vIndex = (y / 2) * vRowStride + (x / 2) * vPixelStride
+                
+                val uValue = if (uvIndex < uBuffer.capacity()) (uBuffer.get(uvIndex).toInt() and 0xff) - 128 else 0
+                val vValue = if (vIndex < vBuffer.capacity()) (vBuffer.get(vIndex).toInt() and 0xff) - 128 else 0
+                
+                var rCol = (yValue + 1.370705f * vValue).toInt()
+                var gCol = (yValue - 0.337633f * uValue - 0.698001f * vValue).toInt()
+                var bCol = (yValue + 1.732446f * uValue).toInt()
+                
+                rCol = rCol.coerceIn(0, 255)
+                gCol = gCol.coerceIn(0, 255)
+                bCol = bCol.coerceIn(0, 255)
+                
+                pixels[index++] = (0xff shl 24) or (rCol shl 16) or (gCol shl 8) or bCol
+            }
+        }
+        bitmap.setPixels(pixels, 0, w, 0, 0, w, h)
+        return bitmap
+    }
+
+    fun release() {
+        try {
+            decoder?.stop()
+            decoder?.release()
+        } catch (e: Exception) {}
+        decoder = null
+        
+        try {
+            extractor?.release()
+        } catch (e: Exception) {}
+        extractor = null
+    }
+}
+
