@@ -59,7 +59,121 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
 
                         val app = getApplication<Application>()
                         val settingsManager = com.example.settings.SettingsManager(app)
-                        
+                        val isArabic = settingsManager.language.first() == "ar"
+
+                        _uiState.value = ReelState.Loading(
+                            if (isArabic) "جاري توليد وحفظ معلومات النشر الاحترافية..." 
+                            else "Generating and saving professional publish details...",
+                            0.92f
+                        )
+
+                        val surahName = com.example.SURAH_NAMES.getOrNull(currentSurah - 1) ?: "سورة"
+                        val reciterName = _reciters.value.find { it.first == currentReciterId }?.second ?: "العفاسي"
+
+                        // Run metadata generator always for all 4 channels to create the comprehensive details .txt file!
+                        val generator = com.example.generator.GeminiMetaGenerator()
+                        var meta = generator.generateSocialMeta(
+                            context = app,
+                            surahName = surahName,
+                            startAyah = currentStartAyah,
+                            endAyah = currentEndAyah,
+                            reciterName = reciterName,
+                            isTiktok = true,
+                            isInstagram = true,
+                            isFacebook = true,
+                            isYoutube = true
+                        )
+
+                        // Elegant template generator if Gemini is not configured / failed
+                        if (meta == null) {
+                            val title = if (isArabic)
+                                "تلاوة خاشعة تريح قلبك المنهك بالهموم ☕️🌿 | سورة $surahName آيات $currentStartAyah-$currentEndAyah"
+                            else "Breathtaking peaceful Quran recitation - Surah $surahName Verses $currentStartAyah-$currentEndAyah"
+
+                            val descriptionYt = if (isArabic)
+                                "أنصت بقلبك إلى تلاوة خاشعة هادئة تذيب الهموم والأحزان للقارئ الشيخ $reciterName.\nسورة $surahName (الآيات من $currentStartAyah إلى $currentEndAyah).\nاشترك في القناة للمزيد من المقاطع والتدبر الإيماني."
+                            else "Ponder upon this moving and peaceful recitation of Surah $surahName, Ayahs $currentStartAyah-$currentEndAyah by Sheikh $reciterName. Please subscribe for more daily spiritual reminders."
+
+                            val descriptionTt = if (isArabic)
+                                "أرح قلبك المنهك بآيات من سورة $surahName تلاوة تفوق الوصف للقارئ $reciterName 🥀✨\nاستمع وتدبر الآيات الكريمة شارك الأجر بالنشر والتعليق."
+                            else "Take a deep breath and soothe your anxious heart. Holy Quran recitation by $reciterName 🌌🌸\nSupport the page by sharing the reward."
+
+                            val descriptionFb = if (isArabic)
+                                "تلاوة تفوق الوصف تلامس الروح وتذهب هموم الدنيا 🤲🌿\nسورة $surahName بصوت الشيخ $reciterName.\nأسأل الله العظيم أن يجعل القرآن ربيع قلوبنا وجلاء همومنا ونور صدورنا."
+                            else "A recitation that touches the soul and cleanses the heart of worldly worries. Surah $surahName, recited beautifully by $reciterName. May Allah reward everyone who shares this video."
+
+                            val descriptionInst = if (isArabic)
+                                "هدوء وسكينة حقيقية لروحك المتعبة 💎✨\nالقرآن الكريم، بصوت القارئ الشيخ $reciterName (سورة $surahName آيات $currentStartAyah-$currentEndAyah).\n#اكسبلور_قرآن #تدبر #راحة_نفسية"
+                            else "Deep tranquil peace for your soul. Holy Quran, Surah $surahName Ayat $currentStartAyah-$currentEndAyah recited by $reciterName. 🌱💖\n#explore #quran"
+
+                            meta = com.example.generator.GeneratedMetaResult(
+                                tiktok = com.example.generator.PlatformMeta(title, descriptionTt, if (isArabic) "#قران_كريم #تلاوة_خاشعة #راحة_نفسية #أرح_قلبك #foryou #قرآن" else "#quran #peace #islam"),
+                                instagram = com.example.generator.PlatformMeta(title, descriptionInst, if (isArabic) "#reels #quran #راحة #اسلاميات #explore #تدبر" else "#reels #explore #quran"),
+                                facebook = com.example.generator.PlatformMeta(title, descriptionFb, if (isArabic) "#دروس_دينية #تلاوت_خاشعة #فيس_بوك_إسلامي #أرح_سمعك" else "#quran #recitation #facebookislam"),
+                                youtube = com.example.generator.PlatformMeta(title, descriptionYt, if (isArabic) "#Shorts #قرآن #تلاوة_خاشعة #راحة_نفسية" else "#Shorts #quran #recitation")
+                            )
+                        }
+
+                        // Write publish details file to /storage/emulated/0/Movies/Quran Reels/Details/
+                        try {
+                            val detailsDir = java.io.File("/storage/emulated/0/Movies/Quran Reels/Details")
+                            if (!detailsDir.exists()) {
+                                detailsDir.mkdirs()
+                            }
+                            
+                            val detailsContent = """
+                                معلومات النشر على اليوتيوب : 
+                                
+                                الاسم : ${meta.youtube?.title ?: ""}
+                                
+                                الوصف : ${meta.youtube?.description ?: ""}
+                                
+                                الكلمات الدلالية و الهاشتاقات : ${meta.youtube?.hashtags ?: ""}
+                                
+                                
+                                معلومات النشر على التيك توك : 
+                                
+                                الاسم : ${meta.tiktok?.title ?: ""}
+                                
+                                الوصف : ${meta.tiktok?.description ?: ""}
+                                
+                                الكلمات الدلالية و الهاشتاقات : ${meta.tiktok?.hashtags ?: ""}
+                                
+                                
+                                معلومات النشر على الفيسبوك : 
+                                
+                                الاسم : ${meta.facebook?.title ?: ""}
+                                
+                                الوصف : ${meta.facebook?.description ?: ""}
+                                
+                                الكلمات الدلالية و الهاشتاقات : ${meta.facebook?.hashtags ?: ""}
+                                
+                                
+                                معلومات النشر على الانستغرام : 
+                                
+                                الاسم : ${meta.instagram?.title ?: ""}
+                                
+                                الوصف : ${meta.instagram?.description ?: ""}
+                                
+                                الكلمات الدلالية و الهاشتاقات : ${meta.instagram?.hashtags ?: ""}
+                            """.trimIndent()
+                            
+                            val detailsFile = java.io.File(detailsDir, "Quran_Reel_Publish_Details_${System.currentTimeMillis()}.txt")
+                            detailsFile.writeText(detailsContent, Charsets.UTF_8)
+                            
+                            // Let the system MediaScanner scan this file as well
+                            android.media.MediaScannerConnection.scanFile(
+                                app,
+                                arrayOf(detailsFile.absolutePath),
+                                arrayOf("text/plain"),
+                                null
+                            )
+                            android.util.Log.d("DetailsWriter", "Saved details to: ${detailsFile.absolutePath}")
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            android.util.Log.e("DetailsWriter", "Failed to write publish details txt file: ${e.message}")
+                        }
+
                         val isTiktok = settingsManager.tiktokLinked.first() && settingsManager.tiktokAutopost.first()
                         val isInstagram = settingsManager.instagramLinked.first() && settingsManager.instagramAutopost.first()
                         val isFacebook = settingsManager.facebookLinked.first() && settingsManager.facebookAutopost.first()
@@ -72,101 +186,68 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                         val youtubeToken = settingsManager.youtubeAccessToken.first()
                         val webhookUrl = settingsManager.webhookPublishUrl.first()
 
-                        val hasAnyAutopost = isTiktok || isInstagram || isFacebook || isYoutube || webhookUrl.isNotBlank() || isGoogle
+                        // Direct Google Publisher integration
+                        var googleDriveLink: String? = null
+                        if (isGoogle) {
+                            try {
+                                val tempFile = java.io.File(app.cacheDir, "temp_google_upload_${System.currentTimeMillis()}.mp4")
+                                app.contentResolver.openInputStream(state.uri)?.use { input ->
+                                    tempFile.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                                
+                                val descriptionText = meta.tiktok?.description 
+                                    ?: meta.instagram?.description 
+                                    ?: "Quran Reel - Surah $surahName Ayat $currentStartAyah-$currentEndAyah"
 
-                        if (hasAnyAutopost) {
-                            val isArabic = settingsManager.language.first() == "ar"
-                            _uiState.value = ReelState.Loading(
-                                if (isArabic) "جاري النشر التلقائي وتوزيع الفيديو الفعلي..." 
-                                else "Performing real-time auto-publishing and distribution...",
-                                0.95f
-                            )
+                                val googlePublisher = com.example.generator.GoogleDriveSheetsPublisher(app)
+                                val res = googlePublisher.publishReel(
+                                    videoFile = tempFile,
+                                    surahName = surahName,
+                                    ayahRange = "$currentStartAyah-$currentEndAyah",
+                                    reciterName = reciterName,
+                                    description = descriptionText
+                                )
+                                if (res != null) {
+                                    googleDriveLink = res.first
+                                    android.util.Log.d("GooglePublisher", "Direct Google Publisher succeeded! Link: $googleDriveLink")
+                                }
+                                try { tempFile.delete() } catch (ex: Exception) {}
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                android.util.Log.e("GooglePublisher", "Direct Google Publisher failed: ${e.message}")
+                            }
+                        }
 
-                            val surahName = com.example.SURAH_NAMES.getOrNull(currentSurah - 1) ?: "سورة"
-                            val reciterName = _reciters.value.find { it.first == currentReciterId }?.second ?: "العفاسي"
-
-                            val generator = com.example.generator.GeminiMetaGenerator()
-                            val meta = generator.generateSocialMeta(
-                                context = app,
-                                surahName = surahName,
+                        // Webhook dispatch
+                        if (webhookUrl.isNotBlank()) {
+                            dispatchWebhook(
+                                webhookUrl = webhookUrl,
+                                videoUri = state.uri,
+                                surah = currentSurah,
                                 startAyah = currentStartAyah,
                                 endAyah = currentEndAyah,
-                                reciterName = reciterName,
-                                isTiktok = isTiktok,
-                                isInstagram = isInstagram,
-                                isFacebook = isFacebook,
-                                isYoutube = isYoutube
+                                reciter = currentReciterId,
+                                tiktokToken = tiktokToken,
+                                instagramToken = instagramToken,
+                                facebookToken = facebookToken,
+                                youtubeToken = youtubeToken,
+                                metaResult = meta
                             )
-
-                            // If direct Google Drive & Sheets integration is enabled
-                            var googleDriveLink: String? = null
-                            if (isGoogle) {
-                                try {
-                                    val tempFile = java.io.File(app.cacheDir, "temp_google_upload_${System.currentTimeMillis()}.mp4")
-                                    app.contentResolver.openInputStream(state.uri)?.use { input ->
-                                        tempFile.outputStream().use { output ->
-                                            input.copyTo(output)
-                                        }
-                                    }
-                                    
-                                    val descriptionText = meta?.tiktok?.description 
-                                        ?: meta?.instagram?.description 
-                                        ?: "Quran Reel - Surah $surahName Ayat $currentStartAyah-$currentEndAyah"
-
-                                    val googlePublisher = com.example.generator.GoogleDriveSheetsPublisher(app)
-                                    val res = googlePublisher.publishReel(
-                                        videoFile = tempFile,
-                                        surahName = surahName,
-                                        ayahRange = "$currentStartAyah-$currentEndAyah",
-                                        reciterName = reciterName,
-                                        description = descriptionText
-                                    )
-                                    if (res != null) {
-                                        googleDriveLink = res.first
-                                        android.util.Log.d("GooglePublisher", "Direct Google Publisher succeeded! Link: $googleDriveLink")
-                                    }
-                                    try { tempFile.delete() } catch (ex: Exception) {}
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                    android.util.Log.e("GooglePublisher", "Direct Google Publisher failed: ${e.message}")
-                                }
-                            }
-
-                            // If a real Webhook is configured, dispatch the video and data to it
-                            if (webhookUrl.isNotBlank()) {
-                                dispatchWebhook(
-                                    webhookUrl = webhookUrl,
-                                    videoUri = state.uri,
-                                    surah = currentSurah,
-                                    startAyah = currentStartAyah,
-                                    endAyah = currentEndAyah,
-                                    reciter = currentReciterId,
-                                    tiktokToken = tiktokToken,
-                                    instagramToken = instagramToken,
-                                    facebookToken = facebookToken,
-                                    youtubeToken = youtubeToken,
-                                    metaResult = meta
-                                )
-                            }
-
-                            _uiState.value = ReelState.Success(
-                                uri = state.uri,
-                                generatedMeta = meta,
-                                publishedPlatforms = mapOf(
-                                    "tiktok" to isTiktok,
-                                    "instagram" to isInstagram,
-                                    "facebook" to isFacebook,
-                                    "youtube" to isYoutube,
-                                    "google_drive" to (googleDriveLink != null)
-                                )
-                            )
-                        } else {
-                            _uiState.value = ReelState.Success(
-                                uri = state.uri,
-                                generatedMeta = null,
-                                publishedPlatforms = emptyMap()
-                              )
                         }
+
+                        _uiState.value = ReelState.Success(
+                            uri = state.uri,
+                            generatedMeta = meta,
+                            publishedPlatforms = mapOf(
+                                "tiktok" to isTiktok,
+                                "instagram" to isInstagram,
+                                "facebook" to isFacebook,
+                                "youtube" to isYoutube,
+                                "google_drive" to (googleDriveLink != null)
+                            )
+                        )
                     }
                     is ReelState.Loading -> {
                         _uiState.value = state
