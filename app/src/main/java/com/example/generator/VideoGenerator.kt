@@ -58,6 +58,7 @@ class VideoGenerator {
         reciterId: String,
         showTranslation: Boolean,
         pexelsApiKey: String,
+        isRetry: Boolean = false,
         onProgress: (String, Float) -> Unit,
         onComplete: (Uri) -> Unit,
         onError: (String) -> Unit
@@ -98,14 +99,16 @@ class VideoGenerator {
             var videoLoaded = false
             val downloadedVideoFiles = mutableListOf<File>()
             
-            try {
-                val files = context.cacheDir.listFiles()
-                files?.forEach { f ->
-                    if (f.name.startsWith("bg_video_") && f.name.endsWith(".mp4")) {
-                        f.delete()
+            if (!isRetry) {
+                try {
+                    val files = context.cacheDir.listFiles()
+                    files?.forEach { f ->
+                        if (f.name.startsWith("bg_video_") && f.name.endsWith(".mp4")) {
+                            f.delete()
+                        }
                     }
-                }
-            } catch (ex: Exception) {}
+                } catch (ex: Exception) {}
+            }
             
             if (pexelsApiKey.isNotBlank()) {
                 onProgress(if (isArabic) "جاري البحث عن مناظر طبيعية سينمائية خلابة (Pexels)..." else "Searching for breathtaking nature landscapes (Pexels)...", 0.05f)

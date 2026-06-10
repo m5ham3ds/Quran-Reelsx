@@ -66,6 +66,7 @@ class VideoGenerationService : Service() {
         val reciterId = intent.getStringExtra("reciterId") ?: "ar.alafasy"
         val showTranslation = intent.getBooleanExtra("showTranslation", true)
         val pexelsApiKey = intent.getStringExtra("pexelsApiKey") ?: ""
+        val isRetry = intent.getBooleanExtra("isRetry", false)
 
         scope.launch {
             val settingsManager = com.example.settings.SettingsManager(this@VideoGenerationService)
@@ -77,7 +78,11 @@ class VideoGenerationService : Service() {
 
             try {
                 _serviceState.value = ReelState.Loading(
-                    if (isArabic) "جاري بدء المعالجة وإنشاء القنوات السينمائية..." else "Initializing video filters...",
+                    if (isRetry) {
+                        if (isArabic) "جاري استئناف معالجة المقطع وإعادة المحاولة..." else "Resuming video generation..."
+                    } else {
+                        if (isArabic) "جاري بدء المعالجة وإنشاء القنوات السينمائية..." else "Initializing video filters..."
+                    },
                     0f
                 )
                 val videoGenerator = VideoGenerator()
@@ -90,6 +95,7 @@ class VideoGenerationService : Service() {
                     reciterId = reciterId,
                     showTranslation = showTranslation,
                     pexelsApiKey = pexelsApiKey,
+                    isRetry = isRetry,
                     onProgress = { msg, progress ->
                         _serviceState.value = ReelState.Loading(msg, progress)
                         updateNotificationProgress(msg, progress, isArabic)

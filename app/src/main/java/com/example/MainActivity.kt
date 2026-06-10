@@ -103,87 +103,267 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun ReelHeader(
+    isArabic: Boolean,
+    onMenuClick: () -> Unit
+) {
+    Surface(
+        color = ScreenBg,
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .border(width = 1.dp, color = BorderColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(onClick = onMenuClick) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = if (isArabic) "القائمة" else "Menu",
+                    tint = LuxuryGold,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = if (isArabic) "صانع ريلز القرآن الكريـم" else "Quran Reels Maker",
+                    color = LuxuryGold,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    text = if (isArabic) "مونتاج سينمائي ذكي" else "Cinematic Smart Editor",
+                    color = TextMutedColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+            
+            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = LuxuryGold.copy(alpha = 0.6f),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun MainNavigationScaffold(
     viewModel: ReelViewModel,
     settingsManager: SettingsManager,
     isArabic: Boolean
 ) {
     var selectedTab by remember { mutableStateOf("home") }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = ScreenBg,
-                tonalElevation = 8.dp,
-                modifier = Modifier.border(width = 1.dp, color = BorderColor, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = CardBg,
+                drawerContentColor = TextSoftColor,
+                modifier = Modifier
+                    .width(300.dp)
+                    .fillMaxHeight()
+                    .border(
+                        width = 1.dp,
+                        color = BorderColor,
+                        shape = RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp)
+                    )
             ) {
-                NavigationBarItem(
-                    selected = selectedTab == "home",
-                    onClick = { selectedTab = "home" },
-                    icon = { Icon(Icons.Outlined.Home, contentDescription = null) },
-                    label = { Text(if (isArabic) "الرئيسية" else "Home") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = ScreenBg,
-                        selectedTextColor = LuxuryGold,
-                        unselectedIconColor = TextMutedColor,
-                        unselectedTextColor = TextMutedColor,
-                        indicatorColor = LuxuryGold
+                // Drawer Header
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(ScreenBg, CardBg)
+                            )
+                        )
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(LuxuryGold.copy(alpha = 0.15f))
+                            .border(1.5.dp, LuxuryGold, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "📖",
+                            fontSize = 32.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = if (isArabic) "صانع ريلز القرآن الكريـم" else "Quran Reels Maker",
+                        color = LuxuryGold,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
                     )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == "font",
-                    onClick = { selectedTab = "font" },
-                    icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                    label = { Text(if (isArabic) "الخط" else "Font") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = ScreenBg,
-                        selectedTextColor = LuxuryGold,
-                        unselectedIconColor = TextMutedColor,
-                        unselectedTextColor = TextMutedColor,
-                        indicatorColor = LuxuryGold
+                    Text(
+                        text = if (isArabic) "المساعد والمنتج الذكي للمقاطع" else "Intelligent Reel Production Assistant",
+                        color = TextMutedColor,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
+                }
+
+                HorizontalDivider(color = BorderColor, thickness = 1.dp)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Navigation Items
+                val menuItems = listOf(
+                    Triple("home", if (isArabic) "الرئيسية" else "Home", Icons.Outlined.Home),
+                    Triple("font", if (isArabic) "تنسيق الخطوط والأنماط" else "Font & Custom Style", Icons.Default.Edit),
+                    Triple("social", if (isArabic) "منصات النشر الفوري" else "Publish Channels", Icons.Default.Share),
+                    Triple("settings", if (isArabic) "إعدادات المنصة العامة" else "App Preferences", Icons.Outlined.Settings)
                 )
-                NavigationBarItem(
-                    selected = selectedTab == "social",
-                    onClick = { selectedTab = "social" },
-                    icon = { Icon(Icons.Default.Share, contentDescription = null) },
-                    label = { Text(if (isArabic) "النشر" else "Publish") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = ScreenBg,
-                        selectedTextColor = LuxuryGold,
-                        unselectedIconColor = TextMutedColor,
-                        unselectedTextColor = TextMutedColor,
-                        indicatorColor = LuxuryGold
+
+                menuItems.forEach { (tabId, label, icon) ->
+                    NavigationDrawerItem(
+                        icon = { Icon(icon, contentDescription = null, tint = if (selectedTab == tabId) ScreenBg else LuxuryGold) },
+                        label = { Text(label, fontWeight = if (selectedTab == tabId) FontWeight.Bold else FontWeight.Normal) },
+                        selected = selectedTab == tabId,
+                        onClick = {
+                            selectedTab = tabId
+                            scope.launch { drawerState.close() }
+                        },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            selectedContainerColor = LuxuryGold,
+                            selectedTextColor = ScreenBg,
+                            unselectedContainerColor = Color.Transparent,
+                            unselectedTextColor = TextSoftColor
+                        ),
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                            .testTag("drawer_item_$tabId")
                     )
-                )
-                NavigationBarItem(
-                    selected = selectedTab == "settings",
-                    onClick = { selectedTab = "settings" },
-                    icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
-                    label = { Text(if (isArabic) "الإعدادات" else "Settings") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = ScreenBg,
-                        selectedTextColor = LuxuryGold,
-                        unselectedIconColor = TextMutedColor,
-                        unselectedTextColor = TextMutedColor,
-                        indicatorColor = LuxuryGold
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "V 2.5",
+                        color = TextMutedColor.copy(alpha = 0.5f),
+                        fontSize = 12.sp
                     )
-                )
+                }
             }
-        },
-        containerColor = ScreenBg,
-        modifier = Modifier.fillMaxSize()
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            when (selectedTab) {
-                "home" -> HomeScreen(viewModel = viewModel, isArabic = isArabic, settingsManager = settingsManager)
-                "font" -> FontFormattingScreen(settingsManager = settingsManager, isArabic = isArabic)
-                "social" -> SocialMediaScreen(isArabic = isArabic)
-                "settings" -> SettingsScreen(onNavigateBack = { selectedTab = "home" })
+        }
+    ) {
+        Scaffold(
+            topBar = {
+                ReelHeader(
+                    isArabic = isArabic,
+                    onMenuClick = {
+                        scope.launch {
+                            if (drawerState.isClosed) drawerState.open() else drawerState.close()
+                        }
+                    }
+                )
+            },
+            bottomBar = {
+                NavigationBar(
+                    containerColor = ScreenBg,
+                    tonalElevation = 8.dp,
+                    modifier = Modifier.border(width = 1.dp, color = BorderColor, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                ) {
+                    NavigationBarItem(
+                        selected = selectedTab == "home",
+                        onClick = { selectedTab = "home" },
+                        icon = { Icon(Icons.Outlined.Home, contentDescription = null) },
+                        label = { Text(if (isArabic) "الرئيسية" else "Home") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = ScreenBg,
+                            selectedTextColor = LuxuryGold,
+                            unselectedIconColor = TextMutedColor,
+                            unselectedTextColor = TextMutedColor,
+                            indicatorColor = LuxuryGold
+                        )
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == "font",
+                        onClick = { selectedTab = "font" },
+                        icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                        label = { Text(if (isArabic) "الخط" else "Font") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = ScreenBg,
+                            selectedTextColor = LuxuryGold,
+                            unselectedIconColor = TextMutedColor,
+                            unselectedTextColor = TextMutedColor,
+                            indicatorColor = LuxuryGold
+                        )
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == "social",
+                        onClick = { selectedTab = "social" },
+                        icon = { Icon(Icons.Default.Share, contentDescription = null) },
+                        label = { Text(if (isArabic) "النشر" else "Publish") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = ScreenBg,
+                            selectedTextColor = LuxuryGold,
+                            unselectedIconColor = TextMutedColor,
+                            unselectedTextColor = TextMutedColor,
+                            indicatorColor = LuxuryGold
+                        )
+                    )
+                    NavigationBarItem(
+                        selected = selectedTab == "settings",
+                        onClick = { selectedTab = "settings" },
+                        icon = { Icon(Icons.Outlined.Settings, contentDescription = null) },
+                        label = { Text(if (isArabic) "الإعدادات" else "Settings") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = ScreenBg,
+                            selectedTextColor = LuxuryGold,
+                            unselectedIconColor = TextMutedColor,
+                            unselectedTextColor = TextMutedColor,
+                            indicatorColor = LuxuryGold
+                        )
+                    )
+                }
+            },
+            containerColor = ScreenBg,
+            modifier = Modifier.fillMaxSize()
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                when (selectedTab) {
+                    "home" -> HomeScreen(viewModel = viewModel, isArabic = isArabic, settingsManager = settingsManager)
+                    "font" -> FontFormattingScreen(settingsManager = settingsManager, isArabic = isArabic)
+                    "social" -> SocialMediaScreen(isArabic = isArabic)
+                    "settings" -> SettingsScreen(onNavigateBack = { selectedTab = "home" })
+                }
             }
         }
     }
@@ -199,14 +379,29 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
     val isGenerationPaused by viewModel.isGenerationPausedFlow.collectAsState()
     var showCancelConfirmationDialog by remember { mutableStateOf(false) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> }
-
     var selectedSurahIdx by remember { mutableIntStateOf(0) }
     var startAyahText by remember { mutableStateOf("1") }
     var endAyahText by remember { mutableStateOf("5") }
     var selectedReciterIdx by remember { mutableIntStateOf(0) }
+
+    val ayahsAvailability by viewModel.ayahsAvailability.collectAsState()
+    val isCheckingAvailability by viewModel.isCheckingAvailability.collectAsState()
+
+    LaunchedEffect(selectedSurahIdx, startAyahText, endAyahText, selectedReciterIdx, recitersList) {
+        val surah = selectedSurahIdx + 1
+        val start = startAyahText.toIntOrNull() ?: 1
+        val end = endAyahText.toIntOrNull() ?: start
+        val reciterId = if (recitersList.isNotEmpty() && selectedReciterIdx < recitersList.size) {
+            recitersList[selectedReciterIdx].first
+        } else {
+            "ar.alafasy"
+        }
+        viewModel.checkCurrentAyahsAvailability(surah, start, end, reciterId)
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> }
 
     // Load initial values from settings on start
     val savedSurahIdx by settingsManager.selectedSurahIdx.collectAsState(initial = -1)
@@ -242,12 +437,6 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
     var reciterExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text(if (isArabic) "صانع المقاطع" else "Reel Maker", fontWeight = FontWeight.Bold, color = LuxuryGold, fontSize = 22.sp) },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = ScreenBg)
-            )
-        },
         containerColor = ScreenBg,
         modifier = Modifier.fillMaxSize()
     ) { innerPadding ->
@@ -347,6 +536,44 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                         }
                     }
 
+                    // Calculate clean bounds
+                    val maxAyahs = SURAH_COUNTS[selectedSurahIdx + 1] ?: 1
+                    val cStart = (startAyahText.toIntOrNull() ?: 1).coerceIn(1, maxAyahs)
+                    val cEnd = (endAyahText.toIntOrNull() ?: cStart).coerceIn(cStart, maxAyahs)
+                    val countSelected = cEnd - cStart + 1
+
+                    // Determine border & background colors based on availability
+                    val normalBorderFocused = LuxuryGold
+                    val normalBorderUnfocused = BorderColor
+                    val normalContainer = ScreenBg
+
+                    val greenColor = Color(0xFF499F4C)
+                    val redColor = Color(0xFFE53935)
+
+                    val startBorderColor = if (countSelected <= 2 && !isCheckingAvailability && ayahsAvailability.isNotEmpty()) {
+                        if (ayahsAvailability[cStart] == true) greenColor else redColor
+                    } else {
+                        null
+                    }
+
+                    val endBorderColor = if (countSelected <= 2 && !isCheckingAvailability && ayahsAvailability.isNotEmpty()) {
+                        if (ayahsAvailability[cEnd] == true) greenColor else redColor
+                    } else {
+                        null
+                    }
+
+                    val startContainerColor = if (countSelected <= 2 && !isCheckingAvailability && ayahsAvailability.isNotEmpty()) {
+                        if (ayahsAvailability[cStart] == true) greenColor.copy(alpha = 0.08f) else redColor.copy(alpha = 0.08f)
+                    } else {
+                        normalContainer
+                    }
+
+                    val endContainerColor = if (countSelected <= 2 && !isCheckingAvailability && ayahsAvailability.isNotEmpty()) {
+                        if (ayahsAvailability[cEnd] == true) greenColor.copy(alpha = 0.08f) else redColor.copy(alpha = 0.08f)
+                    } else {
+                        normalContainer
+                    }
+
                     // Ayah bounds row
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -366,10 +593,10 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = TextSoftColor,
                                     unfocusedTextColor = TextSoftColor,
-                                    focusedBorderColor = LuxuryGold,
-                                    unfocusedBorderColor = BorderColor,
-                                    focusedContainerColor = ScreenBg,
-                                    unfocusedContainerColor = ScreenBg,
+                                    focusedBorderColor = startBorderColor ?: normalBorderFocused,
+                                    unfocusedBorderColor = startBorderColor ?: normalBorderUnfocused,
+                                    focusedContainerColor = startContainerColor,
+                                    unfocusedContainerColor = startContainerColor,
                                     disabledContainerColor = ScreenBg,
                                     errorContainerColor = ScreenBg
                                 ),
@@ -391,15 +618,58 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = TextSoftColor,
                                     unfocusedTextColor = TextSoftColor,
-                                    focusedBorderColor = LuxuryGold,
-                                    unfocusedBorderColor = BorderColor,
-                                    focusedContainerColor = ScreenBg,
-                                    unfocusedContainerColor = ScreenBg,
+                                    focusedBorderColor = endBorderColor ?: normalBorderFocused,
+                                    unfocusedBorderColor = endBorderColor ?: normalBorderUnfocused,
+                                    focusedContainerColor = endContainerColor,
+                                    unfocusedContainerColor = endContainerColor,
                                     disabledContainerColor = ScreenBg,
                                     errorContainerColor = ScreenBg
                                 ),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    // Availability Indicator & Warning Banners
+                    if (isCheckingAvailability) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = LuxuryGold,
+                                strokeWidth = 1.5.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isArabic) "جاري التحقق من توفر تلاوة الآيات..." else "Verifying verse recitation availability...",
+                                color = TextMutedColor,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else if (countSelected > 2) {
+                        val unavailableList = (cStart..cEnd).filter { ayahsAvailability[it] == false }
+                        if (unavailableList.isNotEmpty()) {
+                            val alertMsg = if (isArabic) {
+                                "⚠️ تنبيه: الآيات التالية غير متوفرة بصوت هذا القارئ على المنصة: ${unavailableList.joinToString("، ")}"
+                            } else {
+                                "⚠️ Notice: The following Ayahs are not available for this reciter on the platform: ${unavailableList.joinToString(", ")}"
+                            }
+                            Text(
+                                text = alertMsg,
+                                color = Color(0xFFEF5350),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFFE53935).copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                                    .border(width = 1.dp, color = Color(0xFFEF5350).copy(alpha = 0.3f), shape = RoundedCornerShape(8.dp))
+                                    .padding(10.dp)
                             )
                         }
                     }
@@ -542,11 +812,43 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                     fontWeight = FontWeight.Medium,
                                     modifier = Modifier.fillMaxWidth()
                                 )
-                                Button(
-                                    onClick = { viewModel.reset() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = BorderColor, contentColor = TextSoftColor)
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Text(if (isArabic) "إعادة المحاولة" else "Retry")
+                                    Button(
+                                        onClick = { viewModel.resumeGeneration(context) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f).height(48.dp)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = if (isArabic) "استئناف ومحاولة" else "Resume & Retry",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                    }
+                                    
+                                    Button(
+                                        onClick = { viewModel.reset() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = BorderColor, contentColor = TextSoftColor),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.weight(1f).height(48.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isArabic) "إعادة البدء" else "Reset / Start Over",
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 14.sp
+                                        )
+                                    }
                                 }
                             }
                             is ReelState.Loading -> {

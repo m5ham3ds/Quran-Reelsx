@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.MediaType.Companion.toMediaType
@@ -40,11 +42,92 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
     private val _reciters = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val reciters: StateFlow<List<Pair<String, String>>> = _reciters
 
+    private val _ayahsAvailability = MutableStateFlow<Map<Int, Boolean>>(emptyMap())
+    val ayahsAvailability: StateFlow<Map<Int, Boolean>> = _ayahsAvailability
+
+    private val _isCheckingAvailability = MutableStateFlow(false)
+    val isCheckingAvailability: StateFlow<Boolean> = _isCheckingAvailability
+
+    private var checkJob: Job? = null
+
+    fun checkCurrentAyahsAvailability(surah: Int, startAyah: Int, endAyah: Int, reciterId: String) {
+        checkJob?.cancel()
+        if (reciterId.isBlank() || startAyah <= 0 || endAyah < startAyah) {
+            _ayahsAvailability.value = emptyMap()
+            _isCheckingAvailability.value = false
+            return
+        }
+        
+        checkJob = viewModelScope.launch(Dispatchers.IO) {
+            _isCheckingAvailability.value = true
+            try {
+                val results = mutableMapOf<Int, Boolean>()
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                
+                val maxCount = com.example.SURAH_COUNTS[surah] ?: 1
+                val cleanStart = startAyah.coerceIn(1, maxCount)
+                val cleanEnd = endAyah.coerceIn(cleanStart, maxCount)
+                
+                val checkLimit = 30
+                val endCheck = if (cleanEnd - cleanStart + 1 > checkLimit) {
+                    cleanStart + checkLimit - 1
+                } else {
+                    cleanEnd
+                }
+                
+                val deferreds = (cleanStart..endCheck).map { ayah ->
+                    async {
+                        var global = 0
+                        for (s in 1 until surah) {
+                            global += com.example.SURAH_COUNTS[s] ?: 0
+                        }
+                        val globalAyah = global + ayah
+                        
+                        val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyah.mp3"
+                        val request = Request.Builder().url(url).head().build() 
+                        var exists = false
+                        try {
+                            client.newCall(request).execute().use { response ->
+                                exists = response.isSuccessful
+                            }
+                        } catch (e: Exception) {
+                            exists = true // fallback to avoid false alarms due to transient network drops
+                        }
+                        ayah to exists
+                    }
+                }
+                deferreds.forEach {
+                    val pair = it.await()
+                    results[pair.first] = pair.second
+                }
+                _ayahsAvailability.value = results
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isCheckingAvailability.value = false
+            }
+        }
+    }
+
     // Active Generation Metadata Tracker
     private var currentSurah: Int = 1
     private var currentStartAyah: Int = 1
     private var currentEndAyah: Int = 5
     private var currentReciterId: String = "ar.alafasy"
+
+    fun resumeGeneration(context: Context) {
+        generate(
+            context = context,
+            surah = currentSurah,
+            startAyah = currentStartAyah,
+            endAyah = currentEndAyah,
+            reciterId = currentReciterId,
+            isRetry = true
+        )
+    }
     
     init {
         fetchReciters()
@@ -303,14 +386,15 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
         surah: Int,
         startAyah: Int,
         endAyah: Int,
-        reciterId: String
+        reciterId: String,
+        isRetry: Boolean = false
     ) {
         currentSurah = surah
         currentStartAyah = startAyah
         currentEndAyah = endAyah
         currentReciterId = reciterId
 
-        _uiState.value = ReelState.Loading("جاري البدء...", 0f)
+        _uiState.value = ReelState.Loading(if (isRetry) "جاري استئناف المعالجة وإعادة المحاولة..." else "جاري البدء...", 0f)
         viewModelScope.launch {
             val settingsManager = com.example.settings.SettingsManager(context)
             val showTranslation = settingsManager.showTranslation.first()
@@ -323,6 +407,7 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                 putExtra("reciterId", reciterId)
                 putExtra("showTranslation", showTranslation)
                 putExtra("pexelsApiKey", pexelsApiKey)
+                putExtra("isRetry", isRetry)
             }
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
