@@ -56,6 +56,15 @@ class SettingsManager(private val context: Context) {
         val YOUTUBE_ACCESS_TOKEN = stringPreferencesKey("youtube_access_token")
         val WEBHOOK_PUBLISH_URL = stringPreferencesKey("webhook_publish_url")
 
+        val TIKTOK_CLIENT_KEY = stringPreferencesKey("tiktok_client_key")
+        val TIKTOK_CLIENT_SECRET = stringPreferencesKey("tiktok_client_secret")
+        val INSTAGRAM_CLIENT_ID = stringPreferencesKey("instagram_client_id")
+        val INSTAGRAM_CLIENT_SECRET = stringPreferencesKey("instagram_client_secret")
+        val FACEBOOK_CLIENT_ID = stringPreferencesKey("facebook_client_id")
+        val FACEBOOK_CLIENT_SECRET = stringPreferencesKey("facebook_client_secret")
+        val YOUTUBE_CLIENT_ID = stringPreferencesKey("youtube_client_id")
+        val YOUTUBE_CLIENT_SECRET = stringPreferencesKey("youtube_client_secret")
+
         // Google Drive & Sheets preferences keys
         val GOOGLE_DRIVE_SHEETS_LINKED = booleanPreferencesKey("google_drive_sheets_linked")
         val GOOGLE_ACCOUNT_EMAIL = stringPreferencesKey("google_account_email")
@@ -115,6 +124,15 @@ class SettingsManager(private val context: Context) {
     val facebookAccessToken: Flow<String> = context.dataStore.data.map { it[FACEBOOK_ACCESS_TOKEN] ?: "" }
     val youtubeAccessToken: Flow<String> = context.dataStore.data.map { it[YOUTUBE_ACCESS_TOKEN] ?: "" }
     val webhookPublishUrl: Flow<String> = context.dataStore.data.map { it[WEBHOOK_PUBLISH_URL] ?: "" }
+
+    val tiktokClientKey: Flow<String> = context.dataStore.data.map { it[TIKTOK_CLIENT_KEY] ?: "" }
+    val tiktokClientSecret: Flow<String> = context.dataStore.data.map { it[TIKTOK_CLIENT_SECRET] ?: "" }
+    val instagramClientId: Flow<String> = context.dataStore.data.map { it[INSTAGRAM_CLIENT_ID] ?: "" }
+    val instagramClientSecret: Flow<String> = context.dataStore.data.map { it[INSTAGRAM_CLIENT_SECRET] ?: "" }
+    val facebookClientId: Flow<String> = context.dataStore.data.map { it[FACEBOOK_CLIENT_ID] ?: "" }
+    val facebookClientSecret: Flow<String> = context.dataStore.data.map { it[FACEBOOK_CLIENT_SECRET] ?: "" }
+    val youtubeClientId: Flow<String> = context.dataStore.data.map { it[YOUTUBE_CLIENT_ID] ?: "" }
+    val youtubeClientSecret: Flow<String> = context.dataStore.data.map { it[YOUTUBE_CLIENT_SECRET] ?: "" }
 
     // Google Drive & Sheets flow accessors
     val googleDriveSheetsLinked: Flow<Boolean> = context.dataStore.data.map { it[GOOGLE_DRIVE_SHEETS_LINKED] ?: false }
@@ -270,6 +288,38 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setWebhookPublishUrl(value: String) {
         context.dataStore.edit { it[WEBHOOK_PUBLISH_URL] = value }
+    }
+
+    suspend fun setTiktokClientKey(value: String) {
+        context.dataStore.edit { it[TIKTOK_CLIENT_KEY] = value }
+    }
+
+    suspend fun setTiktokClientSecret(value: String) {
+        context.dataStore.edit { it[TIKTOK_CLIENT_SECRET] = value }
+    }
+
+    suspend fun setInstagramClientId(value: String) {
+        context.dataStore.edit { it[INSTAGRAM_CLIENT_ID] = value }
+    }
+
+    suspend fun setInstagramClientSecret(value: String) {
+        context.dataStore.edit { it[INSTAGRAM_CLIENT_SECRET] = value }
+    }
+
+    suspend fun setFacebookClientId(value: String) {
+        context.dataStore.edit { it[FACEBOOK_CLIENT_ID] = value }
+    }
+
+    suspend fun setFacebookClientSecret(value: String) {
+        context.dataStore.edit { it[FACEBOOK_CLIENT_SECRET] = value }
+    }
+
+    suspend fun setYoutubeClientId(value: String) {
+        context.dataStore.edit { it[YOUTUBE_CLIENT_ID] = value }
+    }
+
+    suspend fun setYoutubeClientSecret(value: String) {
+        context.dataStore.edit { it[YOUTUBE_CLIENT_SECRET] = value }
     }
 
     // Google Drive & Sheets setters

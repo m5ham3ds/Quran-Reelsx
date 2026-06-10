@@ -10,9 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,6 +65,15 @@ fun SocialMediaScreen(isArabic: Boolean) {
     val youtubeAccessToken by settingsManager.youtubeAccessToken.collectAsState(initial = "")
     val webhookPublishUrl by settingsManager.webhookPublishUrl.collectAsState(initial = "")
 
+    val tiktokClientKey by settingsManager.tiktokClientKey.collectAsState(initial = "")
+    val tiktokClientSecret by settingsManager.tiktokClientSecret.collectAsState(initial = "")
+    val instagramClientId by settingsManager.instagramClientId.collectAsState(initial = "")
+    val instagramClientSecret by settingsManager.instagramClientSecret.collectAsState(initial = "")
+    val facebookClientId by settingsManager.facebookClientId.collectAsState(initial = "")
+    val facebookClientSecret by settingsManager.facebookClientSecret.collectAsState(initial = "")
+    val youtubeClientId by settingsManager.youtubeClientId.collectAsState(initial = "")
+    val youtubeClientSecret by settingsManager.youtubeClientSecret.collectAsState(initial = "")
+
     // Google Drive & Sheets Direct Integration state loads
     val googleDriveSheetsLinked by settingsManager.googleDriveSheetsLinked.collectAsState(initial = false)
     val googleAccountEmail by settingsManager.googleAccountEmail.collectAsState(initial = "")
@@ -73,27 +82,21 @@ fun SocialMediaScreen(isArabic: Boolean) {
     val googleOauthAccessToken by settingsManager.googleOauthAccessToken.collectAsState(initial = "")
     val googleAutoSaveEnabled by settingsManager.googleAutoSaveEnabled.collectAsState(initial = true)
 
-    // Simulation & UI flow states
+    // Action dialog triggers
     var isLinkingPlatform by remember { mutableStateOf<String?>(null) }
     var activeDialogPlatform by remember { mutableStateOf<String?>(null) }
-    var activeDialogHandle by remember { mutableStateOf("") }
-    var activeDialogToken by remember { mutableStateOf("") }
     var showWebhookDialog by remember { mutableStateOf(false) }
-    var showOauthMockByPlatform by remember { mutableStateOf<String?>(null) }
-    
-    // Google dialog states
     var showGoogleConfigDialog by remember { mutableStateOf(false) }
     var showGoogleOauthDialog by remember { mutableStateOf(false) }
-    var showGoogleTokenManualDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { 
                     Text(
-                        text = if (isArabic) "حسابات النشر والربط" else "Social Hub & Streaming", 
-                        fontWeight = FontWeight.Bold, 
+                        text = if (isArabic) "النشر والربط التلقائي" else "Publish & Social Integration", 
                         color = LuxuryGold, 
+                        fontWeight = FontWeight.Bold,
                         fontSize = 20.sp
                     ) 
                 },
@@ -108,436 +111,245 @@ fun SocialMediaScreen(isArabic: Boolean) {
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Header
-            Icon(
-                imageVector = Icons.Outlined.Share,
-                contentDescription = null,
-                tint = LuxuryGold,
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(CardBg, CircleShape)
-                    .border(1.dp, LuxuryGold, CircleShape)
-                    .padding(16.dp)
-            )
-            
-            Text(
-                text = if (isArabic) "اربط منصاتك للتوزيع السينمائي والتحكم الكامل بالنشر التلقائي" else "Link your platforms for screen streaming and automated distribution",
-                color = TextSoftColor,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Google Drive & Google Sheets Direct Integration Card
+            // Main informative header
             Card(
                 colors = CardDefaults.cardColors(containerColor = CardBg),
-                border = BorderStroke(1.dp, if (googleDriveSheetsLinked) LuxuryGold else BorderColor),
                 shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, BorderColor),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(
+                Row(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Header (Icon + Name + Link/Unlink Action Button)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(LuxuryGold.copy(alpha = 0.12f), CircleShape),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = if (googleDriveSheetsLinked) LuxuryGold else TextMutedColor,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = if (isArabic) "جوجل درايف وشيتس (Google Cloud)" else "Google Cloud Drive & Sheets",
-                                color = if (googleDriveSheetsLinked) Color.White else TextSoftColor,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                        }
-
-                        Button(
-                            onClick = {
-                                if (googleDriveSheetsLinked) {
-                                    scope.launch {
-                                        settingsManager.setGoogleDriveSheetsLinked(false)
-                                        settingsManager.setGoogleAccountEmail("")
-                                        settingsManager.setGoogleOauthAccessToken("")
-                                        Toast.makeText(context, if (isArabic) "تم إلغاء ربط حساب Google" else "Google Account unlinked", Toast.LENGTH_SHORT).show()
-                                    }
-                                } else {
-                                    showGoogleOauthDialog = true
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (googleDriveSheetsLinked) Color(0x1FFA2E1A) else LuxuryGold,
-                                contentColor = if (googleDriveSheetsLinked) Color(0xFFE57373) else ScreenBg,
-                                disabledContainerColor = BorderColor
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            border = if (googleDriveSheetsLinked) BorderStroke(1.dp, Color(0x33E57373)) else null,
-                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                            modifier = Modifier.height(36.dp)
-                        ) {
-                            Text(
-                                text = if (googleDriveSheetsLinked) (if (isArabic) "إلغاء الربط" else "Disconnect") else (if (isArabic) "ربط الحساب عبر OAuth" else "Connect via OAuth"),
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Share, 
+                            contentDescription = "Social Settings logo", 
+                            tint = LuxuryGold,
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
-
-                    Text(
-                        text = if (isArabic) {
-                            "اربط حساب Google الخاص بك لرفع فيديوهات الـ Reels المصنعة وحفظها بشكل مباشر في مجلد Google Drive، مع تدوين بيانات النشر (اسم السورة، نطاق الآيات، القارئ، والوصف والهاشتاجات الذكية بـ AI) مباشرة في سطر جديد بـ Google Sheets دون الحاجة لأي طرف ثالث خارجي!"
-                        } else {
-                            "Directly upload generated vertical reels to Google Drive, and instantly write chronological metadata (timestamp, surah, ayah range, reciter, shareable drive link, and AI descriptions) to a Google Sheet row without any third-party intermediaries."
-                        },
-                        color = TextSoftColor,
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp
-                    )
-
-                    if (googleDriveSheetsLinked) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = ScreenBg,
-                            border = BorderStroke(1.dp, BorderColor),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column {
-                                        Text(
-                                            text = if (isArabic) "البريد الإلكتروني المرتبط:" else "Linked Google Account:",
-                                            color = TextMutedColor,
-                                            fontSize = 11.sp
-                                        )
-                                        Text(
-                                            text = googleAccountEmail.ifBlank { "user@gmail.com" },
-                                            color = LuxuryGold,
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp
-                                        )
-                                    }
-
-                                    // Configure Folder and Sheet button
-                                    TextButton(
-                                        onClick = { showGoogleConfigDialog = true },
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                                        modifier = Modifier.height(32.dp),
-                                        colors = ButtonDefaults.textButtonColors(
-                                            contentColor = SoftGold,
-                                            containerColor = Color(0x0AFFFFFF)
-                                        )
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = if (isArabic) "إعداد المجلد والشيت" else "Configure IDs",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Divider(color = BorderColor, thickness = 0.5.dp)
-
-                                // Display Google drive folder configuration
-                                Column {
-                                    Text(
-                                        text = if (isArabic) "مجلد الحفظ Google Drive Folder ID:" else "Target Google Drive Folder ID:",
-                                        color = TextMutedColor,
-                                        fontSize = 11.sp
-                                    )
-                                    Text(
-                                        text = googleDriveFolderId.ifBlank {
-                                            if (isArabic) "تلقائي (سيتم إنشاء مجلد باسم 'Quran Reels' تلقائياً)" else "Automatic (Default 'Quran Reels' folder will be created)"
-                                        },
-                                        color = if (googleDriveFolderId.isBlank()) TextMutedColor else Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(2.dp))
-
-                                // Display Google sheet spreadsheet configuration
-                                Column {
-                                    Text(
-                                        text = if (isArabic) "ملف البيانات Google Sheet Spreadsheet ID:" else "Target Google Sheet Spreadsheet ID:",
-                                        color = TextMutedColor,
-                                        fontSize = 11.sp
-                                    )
-                                    Text(
-                                        text = googleSpreadsheetId.ifBlank {
-                                            if (isArabic) "تلقائي (سيتم إنشاء ملف باسم 'Quran Reels Archive' وجدولته تلقائياً)" else "Automatic (Default sheet named 'Quran Reels Archive' will be created)"
-                                        },
-                                        color = if (googleSpreadsheetId.isBlank()) TextMutedColor else Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-
-                                if (googleOauthAccessToken.isNotBlank()) {
-                                    val maskedToken = if (googleOauthAccessToken.length > 15) googleOauthAccessToken.take(6) + "..." + googleOauthAccessToken.takeLast(6) else googleOauthAccessToken
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = if (isArabic) "رمز الوصول الفني (Token):" else "Secure OAuth Token:",
-                                            color = TextMutedColor,
-                                            fontSize = 11.sp
-                                        )
-                                        Text(
-                                            text = maskedToken,
-                                            color = Color(0xFF81C784),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Direct Auto-save toggling setup
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0x0AFFFFFF), RoundedCornerShape(10.dp))
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = if (isArabic) "الحفظ التلقائي عند التوليد" else "Auto-Save Upon Generation",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 13.sp
-                                )
-                                Text(
-                                    text = if (googleAutoSaveEnabled) {
-                                        if (isArabic) "نشط (سيتم الحفظ والكتابة فوراً بعد رندرة الفيديو)" else "Active (Uploading and logging runs right after render)"
-                                    } else {
-                                        if (isArabic) "معطّل" else "Disabled"
-                                    },
-                                    color = if (googleAutoSaveEnabled) Color(0xFF81C784) else TextMutedColor,
-                                    fontSize = 11.sp
-                                )
-                            }
-
-                            Switch(
-                                checked = googleAutoSaveEnabled,
-                                onCheckedChange = { enabled ->
-                                    scope.launch { settingsManager.setGoogleAutoSaveEnabled(enabled) }
-                                },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = LuxuryGold,
-                                    checkedTrackColor = Color(0x66D29E57),
-                                    uncheckedThumbColor = TextMutedColor,
-                                    uncheckedTrackColor = BorderColor
-                                )
-                            )
-                        }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isArabic) "منصات النشر الإيجابي" else "Channel API Connections",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = if (isArabic) 
+                                "قم بتهيئه ربط شبكات التواصل لنشر مقاطع الفيديو وقصص Reels مباشرة عبر واجهات برمجية معتمدة" 
+                            else "Establish official API handshake connectors to directly automate Publishing and Backup.",
+                            color = TextSoftColor,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // TikTok Card
-            SocialPlatformAccountCard(
-                platformId = "tiktok",
-                platformName = if (isArabic) "تيك توك (TikTok)" else "TikTok Reels",
-                isLinked = tiktokLinked,
-                handle = tiktokHandle,
-                accessToken = tiktokAccessToken,
-                isAutopostEnabled = tiktokAutopost,
-                isLinking = isLinkingPlatform == "tiktok",
-                onLinkClick = {
-                    if (tiktokLinked) {
-                        scope.launch {
-                            settingsManager.setTiktokLinked(false)
-                            settingsManager.setTiktokHandle("")
-                            settingsManager.setTiktokAccessToken("")
-                            Toast.makeText(context, if (isArabic) "تم إلغاء ربط تيك توك" else "TikTok unlinked", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        showOauthMockByPlatform = "tiktok"
+            // 1. Google Drive & Sheets Backup Connection Dashboard
+            GoogleIntegrationCard(
+                isArabic = isArabic,
+                linked = googleDriveSheetsLinked,
+                email = googleAccountEmail,
+                folderId = googleDriveFolderId,
+                sheetId = googleSpreadsheetId,
+                autoSaveEnabled = googleAutoSaveEnabled,
+                onConfigure = { showGoogleConfigDialog = true },
+                onAuthorize = { showGoogleOauthDialog = true },
+                onToggleAutoSave = { enabled ->
+                    scope.launch { settingsManager.setGoogleAutoSaveEnabled(enabled) }
+                },
+                onDisconnect = {
+                    scope.launch {
+                        settingsManager.setGoogleDriveSheetsLinked(false)
+                        settingsManager.setGoogleAccountEmail("")
+                        settingsManager.setGoogleDriveFolderId("")
+                        settingsManager.setGoogleSpreadsheetId("")
+                        settingsManager.setGoogleOauthAccessToken("")
+                        Toast.makeText(context, if (isArabic) "تم قطع الاتصال بجوجل" else "Disconnected from Google Server", Toast.LENGTH_SHORT).show()
                     }
-                },
-                onSwitchAccountClick = {
-                    activeDialogPlatform = "tiktok"
-                    activeDialogHandle = tiktokHandle
-                    activeDialogToken = tiktokAccessToken
-                },
-                onAutopostToggle = { enabled ->
-                    scope.launch { settingsManager.setTiktokAutopost(enabled) }
-                },
-                isArabic = isArabic
+                }
             )
 
-            // Instagram Card
-            SocialPlatformAccountCard(
-                platformId = "instagram",
-                platformName = if (isArabic) "انستقرام (Instagram)" else "Instagram Reels",
-                isLinked = instagramLinked,
-                handle = instagramHandle,
-                accessToken = instagramAccessToken,
-                isAutopostEnabled = instagramAutopost,
-                isLinking = isLinkingPlatform == "instagram",
-                onLinkClick = {
-                    if (instagramLinked) {
-                        scope.launch {
-                            settingsManager.setInstagramLinked(false)
-                            settingsManager.setInstagramHandle("")
-                            settingsManager.setInstagramAccessToken("")
-                            Toast.makeText(context, if (isArabic) "تم إلغاء ربط انستقرام" else "Instagram unlinked", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        showOauthMockByPlatform = "instagram"
-                    }
-                },
-                onSwitchAccountClick = {
-                    activeDialogPlatform = "instagram"
-                    activeDialogHandle = instagramHandle
-                    activeDialogToken = instagramAccessToken
-                },
-                onAutopostToggle = { enabled ->
-                    scope.launch { settingsManager.setInstagramAutopost(enabled) }
-                },
-                isArabic = isArabic
-            )
-
-            // Facebook Card
-            SocialPlatformAccountCard(
-                platformId = "facebook",
-                platformName = if (isArabic) "فيسبوك (Facebook)" else "Facebook Watch",
-                isLinked = facebookLinked,
-                handle = facebookHandle,
-                accessToken = facebookAccessToken,
-                isAutopostEnabled = facebookAutopost,
-                isLinking = isLinkingPlatform == "facebook",
-                onLinkClick = {
-                    if (facebookLinked) {
-                        scope.launch {
-                            settingsManager.setFacebookLinked(false)
-                            settingsManager.setFacebookHandle("")
-                            settingsManager.setFacebookAccessToken("")
-                            Toast.makeText(context, if (isArabic) "تم إلغاء ربط فيسبوك" else "Facebook unlinked", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        showOauthMockByPlatform = "facebook"
-                    }
-                },
-                onSwitchAccountClick = {
-                    activeDialogPlatform = "facebook"
-                    activeDialogHandle = facebookHandle
-                    activeDialogToken = facebookAccessToken
-                },
-                onAutopostToggle = { enabled ->
-                    scope.launch { settingsManager.setFacebookAutopost(enabled) }
-                },
-                isArabic = isArabic
-            )
-
-            // YouTube Card
-            SocialPlatformAccountCard(
-                platformId = "youtube",
-                platformName = if (isArabic) "يوتيوب (YouTube Shorts)" else "YouTube Shorts",
-                isLinked = youtubeLinked,
+            // 2. YouTube Shorts Connector Card
+            PlatformConnectorCard(
+                platform = "youtube",
+                isArabic = isArabic,
+                linked = youtubeLinked,
                 handle = youtubeHandle,
-                accessToken = youtubeAccessToken,
-                isAutopostEnabled = youtubeAutopost,
-                isLinking = isLinkingPlatform == "youtube",
-                onLinkClick = {
-                    if (youtubeLinked) {
-                        scope.launch {
-                            settingsManager.setYoutubeLinked(false)
-                            settingsManager.setYoutubeHandle("")
-                            settingsManager.setYoutubeAccessToken("")
-                            Toast.makeText(context, if (isArabic) "تم إلغاء ربط يوتيوب الشورتس" else "YouTube channel unlinked", Toast.LENGTH_SHORT).show()
-                        }
-                    } else {
-                        showOauthMockByPlatform = "youtube"
-                    }
-                },
-                onSwitchAccountClick = {
-                    activeDialogPlatform = "youtube"
-                    activeDialogHandle = youtubeHandle
-                    activeDialogToken = youtubeAccessToken
-                },
-                onAutopostToggle = { enabled ->
+                autopost = youtubeAutopost,
+                brandColor = Color(0xFFFF0000),
+                onConnect = { activeDialogPlatform = "youtube" },
+                onToggleAutopost = { enabled ->
                     scope.launch { settingsManager.setYoutubeAutopost(enabled) }
                 },
-                isArabic = isArabic
+                onDisconnect = {
+                    scope.launch {
+                        settingsManager.setYoutubeLinked(false)
+                        settingsManager.setYoutubeHandle("")
+                        settingsManager.setYoutubeAccessToken("")
+                    }
+                }
             )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text(
-                text = if (isArabic) "عند تفعيل خيار النشر وتوافر مفاتيح OAuth أو رابط الويب هوك، سيتم نشر Reel وتصدير تفاصيلها تلقائياً بالكامل بمجرد اكتمال التصيير السينمائي." else "Once OAuth keys or custom webhooks are ready, Reels are fully synthesized, customized, and published instantly.",
-                color = TextMutedColor,
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 16.dp)
+
+            // 3. Instagram Reels Connector Card
+            PlatformConnectorCard(
+                platform = "instagram",
+                isArabic = isArabic,
+                linked = instagramLinked,
+                handle = instagramHandle,
+                autopost = instagramAutopost,
+                brandColor = Color(0xFFE1306C),
+                onConnect = { activeDialogPlatform = "instagram" },
+                onToggleAutopost = { enabled ->
+                    scope.launch { settingsManager.setInstagramAutopost(enabled) }
+                },
+                onDisconnect = {
+                    scope.launch {
+                        settingsManager.setInstagramLinked(false)
+                        settingsManager.setInstagramHandle("")
+                        settingsManager.setInstagramAccessToken("")
+                    }
+                }
             )
+
+            // 4. TikTok Video Reels Card
+            PlatformConnectorCard(
+                platform = "tiktok",
+                isArabic = isArabic,
+                linked = tiktokLinked,
+                handle = tiktokHandle,
+                autopost = tiktokAutopost,
+                brandColor = Color(0xFF00F2FE),
+                onConnect = { activeDialogPlatform = "tiktok" },
+                onToggleAutopost = { enabled ->
+                    scope.launch { settingsManager.setTiktokAutopost(enabled) }
+                },
+                onDisconnect = {
+                    scope.launch {
+                        settingsManager.setTiktokLinked(false)
+                        settingsManager.setTiktokHandle("")
+                        settingsManager.setTiktokAccessToken("")
+                    }
+                }
+            )
+
+            // 5. Facebook Pages Connector Card
+            PlatformConnectorCard(
+                platform = "facebook",
+                isArabic = isArabic,
+                linked = facebookLinked,
+                handle = facebookHandle,
+                autopost = facebookAutopost,
+                brandColor = Color(0xFF1877F2),
+                onConnect = { activeDialogPlatform = "facebook" },
+                onToggleAutopost = { enabled ->
+                    scope.launch { settingsManager.setFacebookAutopost(enabled) }
+                },
+                onDisconnect = {
+                    scope.launch {
+                        settingsManager.setFacebookLinked(false)
+                        settingsManager.setFacebookHandle("")
+                        settingsManager.setFacebookAccessToken("")
+                    }
+                }
+            )
+
+            // 6. Automation REST Hook Configuration Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CardBg),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, BorderColor),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = if (isArabic) "رابط ويب هوك خارجي (Webhook)" else "External Webhook Sync URL",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = if (isArabic) 
+                            "يمكنك تسييل خدمة نشر بديلة عبر استدعاء رابط API خاص بك تلقائيا عند توليد كل فيديو." 
+                            else "Publish video webhook URLs to sync generated outputs via customized external servers.",
+                        color = TextSoftColor,
+                        fontSize = 12.sp
+                    )
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(ScreenBg, RoundedCornerShape(8.dp))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(imageVector = Icons.Default.Link, contentDescription = null, tint = LuxuryGold, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (webhookPublishUrl.isBlank()) (if (isArabic) "غير مهيأ" else "Not Configured") else webhookPublishUrl,
+                            color = if (webhookPublishUrl.isBlank()) TextMutedColor else Color.White,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Button(
+                        onClick = { showWebhookDialog = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold.copy(alpha = 0.15f), contentColor = LuxuryGold),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("setup_webhook_button")
+                    ) {
+                        Text(if (isArabic) "تهيئة رابط الويب هوك" else "Configure Webhook Endpoint", fontSize = 12.sp)
+                    }
+                }
+            }
         }
     }
 
-
-
-    // Google Config Edit Dialog
+    // Google API Manual Configuration Dialog
     if (showGoogleConfigDialog) {
         var tempFolderId by remember { mutableStateOf(googleDriveFolderId) }
         var tempSpreadsheetId by remember { mutableStateOf(googleSpreadsheetId) }
+
         AlertDialog(
             onDismissRequest = { showGoogleConfigDialog = false },
             title = {
                 Text(
-                    text = if (isArabic) "إعداد مجلد الدرايف وملف الشيتس" else "Configure Google Drive & Sheets",
-                    color = LuxuryGold,
+                    text = if (isArabic) "تهيئة معرّفات Google" else "Configure Google Storage",
+                    color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            text = if (isArabic) "معرف مجلد Google Drive (Folder ID):" else "Google Drive Folder ID:",
+                            text = if (isArabic) "معرّف مجلد Google Drive (اختياري):" else "Google Drive Folder ID (Optional):",
                             color = TextSoftColor,
                             fontSize = 12.sp
                         )
                         OutlinedTextField(
                             value = tempFolderId,
                             onValueChange = { tempFolderId = it },
-                            placeholder = { Text(if (isArabic) "اتركه فارغاً للإنشاء التلقائي" else "Leave blank to auto-create", color = TextMutedColor) },
+                            placeholder = { Text(if (isArabic) "اتركه فارغاً للإنشاء التلقائي" else "Auto-generated when left blank", color = TextMutedColor) },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
@@ -552,16 +364,16 @@ fun SocialMediaScreen(isArabic: Boolean) {
                         )
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
-                            text = if (isArabic) "معرف ملف البيانات Google Sheet (Spreadsheet ID):" else "Google Sheet Spreadsheet ID:",
+                            text = if (isArabic) "معرّف جدول بيانات Google Sheets (اختياري):" else "Google Spreadsheet ID (Optional):",
                             color = TextSoftColor,
                             fontSize = 12.sp
                         )
                         OutlinedTextField(
                             value = tempSpreadsheetId,
                             onValueChange = { tempSpreadsheetId = it },
-                            placeholder = { Text(if (isArabic) "اتركه فارغاً للإنشاء التلقائي" else "Leave blank to auto-create", color = TextMutedColor) },
+                            placeholder = { Text(if (isArabic) "اتركه فارغاً للإنشاء التلقائي" else "Auto-generated when left blank", color = TextMutedColor) },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
@@ -584,12 +396,12 @@ fun SocialMediaScreen(isArabic: Boolean) {
                             settingsManager.setGoogleDriveFolderId(tempFolderId.trim())
                             settingsManager.setGoogleSpreadsheetId(tempSpreadsheetId.trim())
                             showGoogleConfigDialog = false
-                            Toast.makeText(context, if (isArabic) "تم حفظ الإعدادات بنجاح!" else "Google Drive/Sheets settings saved!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, if (isArabic) "تم حفظ معرّفات التخزين بنجاح" else "Backup directory settings updated", Toast.LENGTH_SHORT).show()
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg)
                 ) {
-                    Text(if (isArabic) "حفظ التعديلات" else "Save Config")
+                    Text(if (isArabic) "حفظ وتثبيت" else "Save Settings")
                 }
             },
             dismissButton = {
@@ -602,19 +414,16 @@ fun SocialMediaScreen(isArabic: Boolean) {
         )
     }
 
-    // Google Secure OAuth Dialog Flow
+    // Google OAuth Fake Simulation Dialog
     if (showGoogleOauthDialog) {
-        var step by remember { mutableStateOf(1) } // 1: Google login prompt, 2: Scopes acceptance page (drive.file sheets), 3: Synced loading progress
-        var emailInput by remember { mutableStateOf("") }
-        var tempToken by remember { mutableStateOf("") }
-        var progress by remember { mutableStateOf(0f) }
+        var emailInput by remember { mutableStateOf(googleAccountEmail) }
+        var tempToken by remember { mutableStateOf(googleOauthAccessToken) }
+        var step by remember { mutableStateOf(1) } // 1: Inputs, 2: Loading sync
 
         AlertDialog(
             onDismissRequest = { showGoogleOauthDialog = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             content = {
                 Surface(
                     color = CardBg,
@@ -623,59 +432,34 @@ fun SocialMediaScreen(isArabic: Boolean) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
+                        modifier = Modifier.fillMaxWidth().padding(20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // Browser Bar Header Mockup
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0x1AFFFFFF), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(modifier = Modifier.size(8.dp).background(Color(0xFFFF5F56), CircleShape))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Box(modifier = Modifier.size(8.dp).background(Color(0xFFFFBD2E), CircleShape))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Box(modifier = Modifier.size(8.dp).background(Color(0xFF27C93F), CircleShape))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "https://accounts.google.com/o/oauth2/v2/auth",
-                                color = TextMutedColor,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                        Text(
+                            text = if (isArabic) "ربط خدمة تخزين سحابة Google" else "Secure Google Storage Authorization",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = LuxuryGold,
+                            textAlign = TextAlign.Center
+                        )
 
                         if (step == 1) {
                             Text(
-                                text = if (isArabic) "تسجيل الدخول الآمن بحساب Google" else "Sign in with Google Secure OAuth",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                textAlign = TextAlign.Center
-                            )
-
-                            Text(
                                 text = if (isArabic) 
-                                    "قم بتسجيل الدخول لربط Quran Reels مباشرة بمساحة التخزين وقوقل شيتس الخاصة بك:"
-                                    else "Log into your Google account to directly bind your spreadsheets and clouds:",
-                                color = TextSoftColor,
+                                    "قم بتسجيل حساب جوجل لحفظ مقاطع الفيديو والتقارير:" 
+                                    else "Provide OAuth linkage to store your generated reels in Google Cloud Storage:",
                                 fontSize = 12.sp,
+                                color = TextSoftColor,
                                 textAlign = TextAlign.Center
                             )
 
                             OutlinedTextField(
                                 value = emailInput,
                                 onValueChange = { emailInput = it },
-                                label = { Text(if (isArabic) "البريد الإلكتروني بـ Google" else "Gmail or Google Email") },
+                                label = { Text(if (isArabic) "بريد حساب Google" else "Gmail or GSuite account") },
                                 singleLine = true,
-                                placeholder = { Text("username@gmail.com", color = TextMutedColor) },
+                                placeholder = { Text("quran.creator.reels@gmail.com", color = TextMutedColor) },
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.White,
                                     unfocusedTextColor = Color.White,
@@ -691,7 +475,7 @@ fun SocialMediaScreen(isArabic: Boolean) {
                             OutlinedTextField(
                                 value = tempToken,
                                 onValueChange = { tempToken = it },
-                                label = { Text(if (isArabic) "مفتاح الوصول المميز API Token (اختياري)" else "Custom Access Token (Optional)") },
+                                label = { Text(if (isArabic) "رمز الوصول الفني OAuth Access Token" else "API Custom OAuth Token (Optional)") },
                                 singleLine = true,
                                 placeholder = { Text("ya29.a0Ac...", color = TextMutedColor) },
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -712,101 +496,26 @@ fun SocialMediaScreen(isArabic: Boolean) {
                                         emailInput = "user_" + (100..999).random() + "@gmail.com"
                                     }
                                     step = 2
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.fillMaxWidth().height(48.dp)
-                            ) {
-                                Text(if (isArabic) "تسجيل الدخول والمتابعة" else "Next", fontWeight = FontWeight.Bold, color = ScreenBg)
-                            }
-
-                            TextButton(onClick = { showGoogleOauthDialog = false }) {
-                                Text(if (isArabic) "إلغاء تماماً" else "Cancel", color = TextMutedColor)
-                            }
-                        }
-
-                        else if (step == 2) {
-                            Text(
-                                text = if (isArabic) "الصلاحيات المطلوبة (Google Workspace)" else "Google Workspace Scope Permissions",
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = LuxuryGold
-                            )
-
-                            Text(
-                                text = if (isArabic) 
-                                    "يتطلب تطبيق Quran Reels الصلاحيات التالية لتصدير الفيديوهات وحفظ البيانات:" 
-                                    else "Quran Reels application is requesting the following api scopes to automate storage:",
-                                fontSize = 13.sp,
-                                color = TextSoftColor,
-                                textAlign = TextAlign.Center
-                            )
-
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(ScreenBg, RoundedCornerShape(12.dp))
-                                    .padding(12.dp)
-                            ) {
-                                val scopesList = listOf(
-                                    "✓ https://www.googleapis.com/auth/drive.file (Upload & Manage created media files)",
-                                    "✓ https://www.googleapis.com/auth/spreadsheets (Create & Append sheets data rows)"
-                                )
-                                scopesList.forEach { scopeTxt ->
-                                    Text(text = scopeTxt, color = Color(0xFF81C784), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-
-                            Button(
-                                onClick = {
-                                    step = 3
                                     scope.launch {
-                                        while (progress < 1f) {
-                                            delay(50)
-                                            progress += 0.05f
-                                        }
-                                        
-                                        val actualToken = tempToken.ifBlank { "ya29.a0Ac" + java.util.UUID.randomUUID().toString().replace("-", "").take(24) }
-                                        settingsManager.setGoogleDriveSheetsLinked(true)
+                                        delay(1500)
                                         settingsManager.setGoogleAccountEmail(emailInput)
-                                        settingsManager.setGoogleOauthAccessToken(actualToken)
-                                        
+                                        settingsManager.setGoogleOauthAccessToken(if (tempToken.isBlank()) "oauth_gtoken_" + java.util.UUID.randomUUID().toString().take(12) else tempToken)
+                                        settingsManager.setGoogleDriveSheetsLinked(true)
                                         showGoogleOauthDialog = false
-                                        Toast.makeText(context, if (isArabic) "تم ربط وتفعيل حساب قوقل درايف وشيتس بنجاح!" else "Google Drive & Sheets linked successfully!", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, if (isArabic) "تم ربط تخزين سحابي بنجاح!" else "Google Drive API setup established!", Toast.LENGTH_SHORT).show()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold),
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier.fillMaxWidth().height(48.dp)
                             ) {
-                                Text(if (isArabic) "سماح ومنح ترخيص OAuth" else "Allow & Grant Permissions", fontWeight = FontWeight.Bold, color = ScreenBg)
+                                Text(if (isArabic) "تسجيل الدخول ومزامنة" else "Login & Authorise", fontWeight = FontWeight.Bold, color = ScreenBg)
                             }
-
-                            TextButton(onClick = { step = 1 }) {
-                                Text(if (isArabic) "رجوع" else "Back", color = TextMutedColor)
-                            }
-                        }
-
-                        else if (step == 3) {
+                        } else {
+                            CircularProgressIndicator(color = LuxuryGold)
                             Text(
-                                text = if (isArabic) "جاري إجراء المصافحة الآمنة مع واجهات Google API..." else "Resolving secure handshake with Google API...",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                textAlign = TextAlign.Center
-                            )
-
-                            LinearProgressIndicator(
-                                progress = progress,
-                                color = LuxuryGold,
-                                trackColor = BorderColor,
-                                modifier = Modifier.fillMaxWidth().height(8.dp).background(Color.Transparent, RoundedCornerShape(4.dp))
-                            )
-
-                            Text(
-                                text = if (isArabic) "جاري مصادقة OAuth 2.0 وتجهيز رموز التشفير الآمن..." else "Verifying OAuth 2.0 credentials & caching secure web tokens...",
-                                fontSize = 12.sp,
+                                text = if (isArabic) "جاري إجراء مصافحة آمنة ومزامنة مجلدات جوجل..." else "Exchanging Google Drive OAuth verification handshakes...",
+                                fontSize = 13.sp,
                                 color = TextSoftColor,
                                 textAlign = TextAlign.Center
                             )
@@ -817,400 +526,413 @@ fun SocialMediaScreen(isArabic: Boolean) {
         )
     }
 
-    // Modern Interactive Mock OAuth Screen Dialog
-    showOauthMockByPlatform?.let { platform ->
-        MockOauthDialog(
-            platform = platform,
-            isArabic = isArabic,
-            onDismiss = { showOauthMockByPlatform = null },
-            onAuthorized = { generatedHandle, generatedToken ->
-                showOauthMockByPlatform = null
-                isLinkingPlatform = platform
-                scope.launch {
-                    delay(1500) // Beautiful API handshaking render latency
-                    when (platform) {
-                        "tiktok" -> {
-                            settingsManager.setTiktokLinked(true)
-                            settingsManager.setTiktokHandle(generatedHandle)
-                            settingsManager.setTiktokAccessToken(generatedToken)
-                        }
-                        "instagram" -> {
-                            settingsManager.setInstagramLinked(true)
-                            settingsManager.setInstagramHandle(generatedHandle)
-                            settingsManager.setInstagramAccessToken(generatedToken)
-                        }
-                        "facebook" -> {
-                            settingsManager.setFacebookLinked(true)
-                            settingsManager.setFacebookHandle(generatedHandle)
-                            settingsManager.setFacebookAccessToken(generatedToken)
-                        }
-                        "youtube" -> {
-                            settingsManager.setYoutubeLinked(true)
-                            settingsManager.setYoutubeHandle(generatedHandle)
-                            settingsManager.setYoutubeAccessToken(generatedToken)
-                        }
-                    }
-                    isLinkingPlatform = null
-                    Toast.makeText(context, if (isArabic) "تم المصادقة والربط عبر OAuth الفني بنجاح!" else "OAuth authentication & sync finished successfully!", Toast.LENGTH_LONG).show()
+    // Webhook configuration dialog
+    if (showWebhookDialog) {
+        var tempUrl by remember { mutableStateOf(webhookPublishUrl) }
+
+        AlertDialog(
+            onDismissRequest = { showWebhookDialog = false },
+            title = {
+                Text(
+                    text = if (isArabic) "تهيئة الويب هوك" else "Webhook Hook Setup",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = if (isArabic) "عنوان URL لاستلام إشعار النشر (POST JSON):" else "External endpoint trigger URL for POST JSON notifications:",
+                        color = TextSoftColor,
+                        fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = tempUrl,
+                        onValueChange = { tempUrl = it },
+                        placeholder = { Text("https://myapi.com/reels/hook", color = TextMutedColor) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = LuxuryGold,
+                            unfocusedBorderColor = BorderColor,
+                            focusedContainerColor = ScreenBg,
+                            unfocusedContainerColor = ScreenBg
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("webhook_input_field")
+                    )
                 }
-            }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            settingsManager.setWebhookPublishUrl(tempUrl.trim())
+                            showWebhookDialog = false
+                            Toast.makeText(context, if (isArabic) "تم حفظ الويب هوك" else "Webhook routing finalized", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg)
+                ) {
+                    Text(if (isArabic) "حفظ وتثبيت" else "Save Hook")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWebhookDialog = false }) {
+                    Text(if (isArabic) "إلغاء الأمر" else "Cancel", color = TextMutedColor)
+                }
+            },
+            containerColor = CardBg,
+            shape = RoundedCornerShape(20.dp)
         )
     }
 
-    // Modal Switch / Link Dialog
+    // Interactive Social Accounts Dialog (Includes Sandbox Oauth & Developer configuration with token assistance)
     activeDialogPlatform?.let { platform ->
-        SwitchAccountDialog(
-            initialHandle = activeDialogHandle,
-            initialToken = activeDialogToken,
-            platform = platform.uppercase(),
+        val initialClientId = when (platform) {
+            "tiktok" -> tiktokClientKey
+            "instagram" -> instagramClientId
+            "facebook" -> facebookClientId
+            "youtube" -> youtubeClientId
+            else -> ""
+        }
+        val initialClientSecret = when (platform) {
+            "tiktok" -> tiktokClientSecret
+            "instagram" -> instagramClientSecret
+            "facebook" -> facebookClientSecret
+            "youtube" -> youtubeClientSecret
+            else -> ""
+        }
+        val initialAccessToken = when (platform) {
+            "tiktok" -> tiktokAccessToken
+            "instagram" -> instagramAccessToken
+            "facebook" -> facebookAccessToken
+            "youtube" -> youtubeAccessToken
+            else -> ""
+        }
+        val initialHandle = when (platform) {
+            "tiktok" -> tiktokHandle
+            "instagram" -> instagramHandle
+            "facebook" -> facebookHandle
+            "youtube" -> youtubeHandle
+            else -> ""
+        }
+
+        MockOauthDialog(
+            platform = platform,
             isArabic = isArabic,
+            initialClientId = initialClientId,
+            initialClientSecret = initialClientSecret,
+            initialAccessToken = initialAccessToken,
+            initialHandle = initialHandle,
             onDismiss = { activeDialogPlatform = null },
-            onSave = { newHandle, newToken ->
-                activeDialogPlatform = null
-                isLinkingPlatform = platform
+            onAuthorized = { handle, accessToken, clientKey, clientSecret ->
                 scope.launch {
-                    delay(1000)
                     when (platform) {
                         "tiktok" -> {
                             settingsManager.setTiktokLinked(true)
-                            settingsManager.setTiktokHandle(newHandle)
-                            settingsManager.setTiktokAccessToken(newToken)
+                            settingsManager.setTiktokHandle(handle)
+                            settingsManager.setTiktokAccessToken(accessToken)
+                            settingsManager.setTiktokClientKey(clientKey)
+                            settingsManager.setTiktokClientSecret(clientSecret)
                         }
                         "instagram" -> {
                             settingsManager.setInstagramLinked(true)
-                            settingsManager.setInstagramHandle(newHandle)
-                            settingsManager.setInstagramAccessToken(newToken)
+                            settingsManager.setInstagramHandle(handle)
+                            settingsManager.setInstagramAccessToken(accessToken)
+                            settingsManager.setInstagramClientId(clientKey)
+                            settingsManager.setInstagramClientSecret(clientSecret)
                         }
                         "facebook" -> {
                             settingsManager.setFacebookLinked(true)
-                            settingsManager.setFacebookHandle(newHandle)
-                            settingsManager.setFacebookAccessToken(newToken)
+                            settingsManager.setFacebookHandle(handle)
+                            settingsManager.setFacebookAccessToken(accessToken)
+                            settingsManager.setFacebookClientId(clientKey)
+                            settingsManager.setFacebookClientSecret(clientSecret)
                         }
                         "youtube" -> {
                             settingsManager.setYoutubeLinked(true)
-                            settingsManager.setYoutubeHandle(newHandle)
-                            settingsManager.setYoutubeAccessToken(newToken)
+                            settingsManager.setYoutubeHandle(handle)
+                            settingsManager.setYoutubeAccessToken(accessToken)
+                            settingsManager.setYoutubeClientId(clientKey)
+                            settingsManager.setYoutubeClientSecret(clientSecret)
                         }
                     }
-                    isLinkingPlatform = null
-                    Toast.makeText(context, if (isArabic) "تم تمكين وتحديث ربط الحساب!" else "Platform account credentials updated!", Toast.LENGTH_SHORT).show()
+                    activeDialogPlatform = null
+                    Toast.makeText(context, if (isArabic) "تم ربط حساب $platform بنجاح!" else "Successfully connected $platform channel!", Toast.LENGTH_SHORT).show()
                 }
             }
         )
     }
 }
 
+// Sub-component for Google Storage Drive & Sheets Card
 @Composable
-fun SocialPlatformAccountCard(
-    platformId: String,
-    platformName: String,
-    isLinked: Boolean,
-    handle: String,
-    accessToken: String,
-    isAutopostEnabled: Boolean,
-    isLinking: Boolean,
-    onLinkClick: () -> Unit,
-    onSwitchAccountClick: () -> Unit,
-    onAutopostToggle: (Boolean) -> Unit,
-    isArabic: Boolean
+fun GoogleIntegrationCard(
+    isArabic: Boolean,
+    linked: Boolean,
+    email: String,
+    folderId: String,
+    sheetId: String,
+    autoSaveEnabled: Boolean,
+    onConfigure: () -> Unit,
+    onAuthorize: () -> Unit,
+    onToggleAutoSave: (Boolean) -> Unit,
+    onDisconnect: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = CardBg),
-        border = BorderStroke(1.dp, if (isLinked) LuxuryGold else BorderColor),
         shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, if (linked) LuxuryGold else BorderColor),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            // Header Row (Icon + Name + Link/Unlink Button)
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isLinked) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = LuxuryGold,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .border(2.dp, BorderColor, CircleShape)
-                        )
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Color(0xFF0F9D58).copy(alpha = 0.15f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(imageVector = Icons.Default.Cloud, contentDescription = null, tint = Color(0xFF0F9D58), modifier = Modifier.size(18.dp))
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = platformName,
-                        color = if (isLinked) Color.White else TextSoftColor,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
-                
-                Button(
-                    onClick = onLinkClick,
-                    enabled = !isLinking,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isLinked) Color(0x1FFA2E1A) else LuxuryGold,
-                        contentColor = if (isLinked) Color(0xFFE57373) else ScreenBg,
-                        disabledContainerColor = BorderColor
-                    ),
-                    shape = RoundedCornerShape(8.dp),
-                    border = if (isLinked) BorderStroke(1.dp, Color(0x33E57373)) else null,
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                    modifier = Modifier.height(36.dp)
-                ) {
-                    if (isLinking) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = LuxuryGold,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
                         Text(
-                            text = if (isLinked) (if (isArabic) "إلغاء الربط" else "Disconnect") else (if (isArabic) "ربط الحساب عبر OAuth" else "Connect via OAuth"),
+                            text = if (isArabic) "ربط سحابي Google Drive & Sheets" else "Google Cloud Drive & Sheets",
+                            color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp
+                            fontSize = 14.sp
                         )
+                        if (linked) {
+                            Text(text = email, color = Color(0xFF81C784), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        } else {
+                            Text(text = if (isArabic) "تخزين احتياطي لقاعدة البيانات والفيديو" else "Cloud backups & Video archival system", color = TextMutedColor, fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                if (linked) {
+                    IconButton(onClick = onDisconnect, modifier = Modifier.testTag("google_disconnect_button")) {
+                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Disconnect Google", tint = Color(0xFFE57373))
                     }
                 }
             }
 
-            // Expanded Options if linked
-            if (isLinked && !isLinking) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = ScreenBg,
-                    border = BorderStroke(1.dp, BorderColor),
-                    modifier = Modifier.fillMaxWidth()
+            if (linked) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(ScreenBg, RoundedCornerShape(10.dp))
+                        .padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    text = if (isArabic) "الحساب المرتبط حالياً:" else "Synchronized Account:",
-                                    color = TextMutedColor,
-                                    fontSize = 11.sp
-                                )
-                                Text(
-                                    text = handle.ifBlank { "@Default_Reels" },
-                                    color = LuxuryGold,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                            }
-                            
-                            // Edit Account/Credentials Manual Button
-                            TextButton(
-                                onClick = onSwitchAccountClick,
-                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                                modifier = Modifier.height(32.dp),
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = SoftGold,
-                                    containerColor = Color(0x0AFFFFFF)
-                                )
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (isArabic) "تعديل الرموز يدوياً" else "Manual Config",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (isArabic) "مجلد Drive:" else "Drive folder ID:", color = TextSoftColor, fontSize = 11.sp)
+                        Text(
+                            text = if (folderId.isBlank()) (if (isArabic) "توليد تلقائي" else "Auto-Created Folder") else folderId,
+                            color = if (folderId.isBlank()) LuxuryGold else Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
-                        // Displaying authentic Access Token placeholder safely
-                        if (accessToken.isNotBlank()) {
-                            val maskedToken = if (accessToken.length > 15) accessToken.take(6) + "..." + accessToken.takeLast(6) else accessToken
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = if (isArabic) "رمز الوصول الفني (Token):" else "Technical OAuth Token:",
-                                    color = TextMutedColor,
-                                    fontSize = 11.sp
-                                )
-                                Text(
-                                    text = maskedToken,
-                                    color = Color(0xFF81C784),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (isArabic) "جدول Sheets:" else "Google spreadsheet ID:", color = TextSoftColor, fontSize = 11.sp)
+                        Text(
+                            text = if (sheetId.isBlank()) (if (isArabic) "توليد تلقائي" else "Auto-Created Sheet") else sheetId,
+                            color = if (sheetId.isBlank()) LuxuryGold else Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
 
-                // Autopost toggle Row
+                // Auto-save toggle switch
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Color(0x0AFFFFFF), RoundedCornerShape(10.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = if (isArabic) "النشر التلقائي للمنصة" else "Automatic Publishing",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = if (isAutopostEnabled) {
-                                if (isArabic) "سيتم النشر تلقائياً بشكل صحيح" else "Enabled for instant stream"
-                            } else {
-                                if (isArabic) "النشر التلقائي لهذه المنصة معطّل" else "Publishing is disabled for this platform"
-                            },
-                            color = if (isAutopostEnabled) Color(0xFF81C784) else TextMutedColor,
-                            fontSize = 11.sp
-                        )
-                    }
-                    
+                    Text(
+                        text = if (isArabic) "مزامنة ونسخ سحابي فوري بعد التثبيت" else "Auto back-up reels & reports instantly",
+                        color = TextSoftColor,
+                        fontSize = 12.sp
+                    )
                     Switch(
-                        checked = isAutopostEnabled,
-                        onCheckedChange = onAutopostToggle,
+                        checked = autoSaveEnabled,
+                        onCheckedChange = onToggleAutoSave,
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = LuxuryGold,
-                            checkedTrackColor = Color(0x66D29E57),
+                            checkedThumbColor = ScreenBg,
+                            checkedTrackColor = LuxuryGold,
                             uncheckedThumbColor = TextMutedColor,
-                            uncheckedTrackColor = BorderColor
+                            uncheckedTrackColor = ScreenBg
                         )
                     )
+                }
+            }
+
+            // Connection action buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (!linked) {
+                    Button(
+                        onClick = onAuthorize,
+                        colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).testTag("google_connect_button")
+                    ) {
+                        Text(if (isArabic) "تسجيل الدخول والربط" else "OAuth Connect", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Button(
+                        onClick = onConfigure,
+                        colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold.copy(alpha = 0.15f), contentColor = LuxuryGold),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f).testTag("google_configure_button")
+                    ) {
+                        Text(if (isArabic) "تغيير معرّف المجلد / الملف" else "Modify Folder/Sheets IDs", fontSize = 12.sp)
+                    }
                 }
             }
         }
     }
 }
 
+// Sub-component social connector cards for Youtube, Instagram, Tiktok, Facebook
 @Composable
-fun SwitchAccountDialog(
-    initialHandle: String,
-    initialToken: String,
+fun PlatformConnectorCard(
     platform: String,
     isArabic: Boolean,
-    onDismiss: () -> Unit,
-    onSave: (String, String) -> Unit
+    linked: Boolean,
+    handle: String,
+    autopost: Boolean,
+    brandColor: Color,
+    onConnect: () -> Unit,
+    onToggleAutopost: (Boolean) -> Unit,
+    onDisconnect: () -> Unit
 ) {
-    var handleText by remember { mutableStateOf(initialHandle) }
-    var tokenText by remember { mutableStateOf(initialToken) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Text(
-                text = if (isArabic) "تعديل رموز الاعتماد يدوياً ($platform)" else "Manual Credentials Link ($platform)",
-                color = LuxuryGold,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        text = if (isArabic) "اسم الحساب أو المعرّف الخاص بك:" else "Your Social Handle / Page Username:",
-                        color = TextSoftColor,
-                        fontSize = 12.sp
-                    )
-                    OutlinedTextField(
-                        value = handleText,
-                        onValueChange = { handleText = it },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = LuxuryGold,
-                            unfocusedBorderColor = BorderColor,
-                            focusedContainerColor = ScreenBg,
-                            unfocusedContainerColor = ScreenBg
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+    val platformLabel = platform.replaceFirstChar { it.uppercase() }
+    val displayIcon = when (platform) {
+        "youtube" -> Icons.Default.PlayArrow
+        "instagram" -> Icons.Default.CameraAlt
+        "facebook" -> Icons.Default.ThumbUp
+        "tiktok" -> Icons.Default.MusicNote
+        else -> Icons.Default.Share
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardBg),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, if (linked) brandColor else BorderColor),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(brandColor.copy(alpha = 0.15f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(imageVector = displayIcon, contentDescription = null, tint = brandColor, modifier = Modifier.size(18.dp))
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = if (isArabic) "منصة $platformLabel" else "$platformLabel Connector",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        if (linked) {
+                            Text(text = handle, color = Color(0xFF81C784), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        } else {
+                            Text(text = if (isArabic) "معالجة وبث الحساب مبرمجاً" else "Disconnected", color = TextMutedColor, fontSize = 11.sp)
+                        }
+                    }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (linked) {
+                    IconButton(onClick = onDisconnect, modifier = Modifier.testTag("${platform}_disconnect_button")) {
+                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Disconnect Account", tint = Color(0xFFE57373))
+                    }
+                }
+            }
+
+            if (linked) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = if (isArabic) "رمز الوصول مخصص API Access Token (اختياري):" else "Custom API Access Token (Optional):",
+                        text = if (isArabic) "التوزيع التلقائي إلى $platformLabel" else "Automated distribution to $platformLabel",
                         color = TextSoftColor,
                         fontSize = 12.sp
                     )
-                    OutlinedTextField(
-                        value = tokenText,
-                        onValueChange = { tokenText = it },
-                        placeholder = { Text("tok_live_...", color = TextMutedColor) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = LuxuryGold,
-                            unfocusedBorderColor = BorderColor,
-                            focusedContainerColor = ScreenBg,
-                            unfocusedContainerColor = ScreenBg
-                        ),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Switch(
+                        checked = autopost,
+                        onCheckedChange = onToggleAutopost,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = ScreenBg,
+                            checkedTrackColor = brandColor,
+                            uncheckedThumbColor = TextMutedColor,
+                            uncheckedTrackColor = ScreenBg
+                        )
                     )
                 }
+            } else {
+                Button(
+                    onClick = onConnect,
+                    colors = ButtonDefaults.buttonColors(containerColor = brandColor, contentColor = Color.White),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("${platform}_connect_button")
+                ) {
+                    Text(if (isArabic) "ربط حساب $platformLabel" else "Link $platformLabel Channel", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSave(handleText.trim(), tokenText.trim()) },
-                colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg)
-            ) {
-                Text(if (isArabic) "حفظ وتثبيت" else "Save & Establish")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(if (isArabic) "إلغاء الأمر" else "Cancel", color = TextMutedColor)
-            }
-        },
-        containerColor = CardBg,
-        shape = RoundedCornerShape(20.dp)
-    )
+        }
+    }
 }
 
+// Master dialog for social platform connection (Support real developer bridge + sandbox testing + token visual directions)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MockOauthDialog(
     platform: String,
     isArabic: Boolean,
+    initialClientId: String,
+    initialClientSecret: String,
+    initialAccessToken: String,
+    initialHandle: String,
     onDismiss: () -> Unit,
-    onAuthorized: (String, String) -> Unit
+    onAuthorized: (String, String, String, String) -> Unit
 ) {
     var step by remember { mutableStateOf(1) } // 1: Setup keys, 2: Scopes list, 3: Animated linkage callback
     var connectionMode by remember { mutableStateOf(1) } // 1: Dev API Bridge, 2: Test Sandbox Mode
 
     // Official mode fields
-    var clientId by remember { mutableStateOf("") }
-    var clientSecret by remember { mutableStateOf("") }
-    var accessTokenField by remember { mutableStateOf("") }
-    var accountHandle by remember { mutableStateOf("") }
+    var clientId by remember { mutableStateOf(initialClientId) }
+    var clientSecret by remember { mutableStateOf(initialClientSecret) }
+    var accessTokenField by remember { mutableStateOf(initialAccessToken) }
+    var accountHandle by remember { mutableStateOf(initialHandle) }
     var officialValidationError by remember { mutableStateOf<String?>(null) }
 
     // Sandbox mode fields
@@ -1218,10 +940,10 @@ fun MockOauthDialog(
 
     var progress by remember { mutableStateOf(0f) }
     val scope = rememberCoroutineScope()
-    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    val uriHandler = LocalUriHandler.current
 
     val primaryColor = when (platform) {
-        "tiktok" -> Color.Black
+        "tiktok" -> Color(0xFF00F2FE)
         "instagram" -> Color(0xFFE1306C)
         "facebook" -> Color(0xFF1877F2)
         "youtube" -> Color(0xFFFF0000)
@@ -1232,8 +954,16 @@ fun MockOauthDialog(
     val devPortalUrl = when (platform) {
         "tiktok" -> "https://developers.tiktok.com/"
         "instagram", "facebook" -> "https://developers.facebook.com/"
-        "youtube" -> "https://console.cloud.google.com/apis/library/youtube.googleapis.com"
+        "youtube" -> "https://console.cloud.google.com/apis/credentials?project=speedy-unison-497014-f4"
         else -> "https://developers.google.com/"
+    }
+
+    // Exact direct links for acquiring temporary Access Tokens
+    val tempTokenHelperUrl = when (platform) {
+        "youtube" -> "https://developers.google.com/oauthplayground" // OAuth 2.0 Playground for Google APIs
+        "instagram", "facebook" -> "https://developers.facebook.com/tools/explorer/" // Facecook Graph API Explorer
+        "tiktok" -> "https://developers.tiktok.com/" // TikTok dev portal
+        else -> devPortalUrl
     }
 
     AlertDialog(
@@ -1298,13 +1028,8 @@ fun MockOauthDialog(
                                 modifier = Modifier.weight(1f),
                                 contentPadding = PaddingValues(vertical = 8.dp)
                             ) {
-                                Text(
-                                    text = if (isArabic) "ربط احترافي للمطورين" else "Developer Web API",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text(if (isArabic) "ربط مباشر (واجهة برمجية)" else "Official API Connector", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
-
                             Button(
                                 onClick = { connectionMode = 2; officialValidationError = null },
                                 colors = ButtonDefaults.buttonColors(
@@ -1315,54 +1040,25 @@ fun MockOauthDialog(
                                 modifier = Modifier.weight(1f),
                                 contentPadding = PaddingValues(vertical = 8.dp)
                             ) {
-                                Text(
-                                    text = if (isArabic) "الربط السريع للتجربة" else "Sandbox/Testing Mode",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Text(if (isArabic) "تجريب بيئة المطور" else "Sandbox Test", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
 
+                        // OFFICIAL MODE FORM
                         if (connectionMode == 1) {
-                            // Official Mode Layout
                             Text(
-                                text = if (isArabic) "ربط حساب مطوري $platformName الرسمي" else "Link Official $platformName Developer Client",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                textAlign = TextAlign.Center
-                            )
-
-                            Text(
-                                text = if (isArabic)
-                                    "قم بتهيئة وإدخال مفاتيح الاعتماد الفنية الخاصة بك مباشرة من لوحة المطور لتمكين النشر التلقائي المباشر:"
-                                    else "Specify authentic Client Credentials sourced from your developer app console directly:",
+                                text = if (isArabic) 
+                                    "أدخل معرّفات التطبيق ومفاتيح الوصول الرسمية من حساب المطورين:" 
+                                    else "Provide verified application credentials and API codes from your Developer portal:",
                                 color = TextSoftColor,
                                 fontSize = 11.sp,
                                 textAlign = TextAlign.Center
                             )
 
-                            // Link to dev portal
-                            Button(
-                                onClick = { uriHandler.openUri(devPortalUrl) },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0x1BFFFFFF), contentColor = LuxuryGold),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                            ) {
-                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp), tint = LuxuryGold)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isArabic) "فتح حساب مطوري $platformName ↗" else "Go to $platformName Developers ↗",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-
                             OutlinedTextField(
                                 value = accountHandle,
                                 onValueChange = { accountHandle = it },
-                                label = { Text(if (isArabic) "اسم الحساب أو معرف الصفحة (مثال: @mychannel)" else "Account handle/username") },
+                                label = { Text(if (isArabic) "اسم الحساب أو معرف القناة (مثال: @mychannel)" else "Account username/handle") },
                                 placeholder = { Text("@quran_reels_official", color = TextMutedColor) },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -1374,13 +1070,14 @@ fun MockOauthDialog(
                                     unfocusedContainerColor = ScreenBg
                                 ),
                                 shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth().testTag("${platform}_handle_field")
                             )
 
                             OutlinedTextField(
                                 value = clientId,
                                 onValueChange = { clientId = it },
-                                label = { Text(if (isArabic) "معرّف التطبيق Client ID / App Key" else "App Client Key / Client ID") },
+                                label = { Text(if (isArabic) "معرّف العميل Client ID / App Key" else "App Client Key / Client ID") },
+                                placeholder = { Text("e.g. 78x9y...", color = TextMutedColor) },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.White,
@@ -1391,14 +1088,14 @@ fun MockOauthDialog(
                                     unfocusedContainerColor = ScreenBg
                                 ),
                                 shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth().testTag("${platform}_client_id_field")
                             )
 
                             OutlinedTextField(
-                                value = accessTokenField,
-                                onValueChange = { accessTokenField = it },
-                                label = { Text(if (isArabic) "رمز الوصول الفني المعتمد Access Token" else "Secret API Access Token") },
-                                placeholder = { Text("act_live_...", color = TextMutedColor) },
+                                value = clientSecret,
+                                onValueChange = { clientSecret = it },
+                                label = { Text(if (isArabic) "كلمة سر التطبيق Client Secret" else "App Client Secret Key") },
+                                placeholder = { Text("e.g. 1a2b3c...", color = TextMutedColor) },
                                 singleLine = true,
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.White,
@@ -1409,31 +1106,84 @@ fun MockOauthDialog(
                                     unfocusedContainerColor = ScreenBg
                                 ),
                                 shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth().testTag("${platform}_client_secret_field")
                             )
 
-                            officialValidationError?.let { err ->
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                OutlinedTextField(
+                                    value = accessTokenField,
+                                    onValueChange = { accessTokenField = it },
+                                    label = { Text(if (isArabic) "رمز الوصول الفني المعتمد Access Token" else "Secret API Access Token") },
+                                    placeholder = { Text("act_live_...", color = TextMutedColor) },
+                                    singleLine = true,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = Color.White,
+                                        unfocusedTextColor = Color.White,
+                                        focusedBorderColor = primaryColor,
+                                        unfocusedBorderColor = BorderColor,
+                                        focusedContainerColor = ScreenBg,
+                                        unfocusedContainerColor = ScreenBg
+                                    ),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth().testTag("${platform}_token_field")
+                                )
+
+                                // REQUIRED ADDITION: Button DIRECTLY below the Access Token field to redirect to get temporary token
+                                Button(
+                                    onClick = { uriHandler.openUri(tempTokenHelperUrl) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = primaryColor.copy(alpha = 0.12f),
+                                        contentColor = primaryColor
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp).testTag("${platform}_gen_temp_token_btn"),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isArabic) "الحصول على رمز وصول مؤقت (عبر المتصفح API Helper)" else "Generate Temporary Access Token (via API Helper)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Developer Portal Setup Manual Navigation Redirect
+                            TextButton(
+                                onClick = { uriHandler.openUri(devPortalUrl) },
+                                modifier = Modifier.fillMaxWidth().testTag("${platform}_dev_portal_btn")
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(imageVector = Icons.Default.Launch, contentDescription = null, modifier = Modifier.size(14.dp), tint = LuxuryGold)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isArabic) "الذهاب لموقع مطوري $platformName لإنشاء التطبيق" else "Go to $platformName Developer Console",
+                                        fontSize = 11.sp,
+                                        color = LuxuryGold,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // Validation Error warning box
+                            officialValidationError?.let { error ->
                                 Text(
-                                    text = err,
+                                    text = error,
                                     color = Color(0xFFE57373),
                                     fontSize = 11.sp,
-                                    textAlign = TextAlign.Center,
                                     fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
                                     modifier = Modifier.padding(horizontal = 8.dp)
                                 )
                             }
 
                             Button(
                                 onClick = {
-                                    if (accountHandle.isBlank()) {
-                                        officialValidationError = if (isArabic) "يرجى تحديد اسم معرف الصفحة أو القناة!" else "Please set your account handle or page username"
-                                    } else if (clientId.isBlank() || clientId.length < 5) {
-                                        officialValidationError = if (isArabic) "يرجى إدخال معرّف تطبيق (Client ID) صالح وصحيح!" else "Please enter a valid Client ID"
-                                    } else if (accessTokenField.isBlank() || accessTokenField.length < 15 ||
-                                               accessTokenField == "test" || accessTokenField == "demo" || accessTokenField == "123456") {
-                                        officialValidationError = if (isArabic)
-                                            "رمز الوصول (Access Token) غير صالح! للربط الفعلي للمنصات، يجب إدخال سطر تشفير حقيقي من لوحة مطوري $platformName يتكون من 15 حرفاً على الأقل للحقن البرمجي السليم. يمكنك استخدام خيار 'الربط السريع للتجربة' بالتبويب الآخر بالإنارة لغرض الفحص والمعاينة الفورية."
-                                            else "Invalid Access Token! Must enter a legitimate encryption API string from your $platformName dashboard (minimum 15 characters) for real production routing. Otherwise use 'Sandbox/Testing Mode' to instantly verify dashboard."
+                                    if (accountHandle.isBlank() || clientId.isBlank() || clientSecret.isBlank() || accessTokenField.isBlank()) {
+                                        officialValidationError = if (isArabic) 
+                                            "عذراً! يجب تعبئة كافة الحقول بشكل صحيح واحترافي لإنشاء اتصال API حقيقي وقائم الأركان."
+                                            else "Please fill all credential fields fully (Handle, Client ID, Secret, Token) to setup real integration."
                                     } else {
                                         officialValidationError = null
                                         step = 2
@@ -1441,27 +1191,18 @@ fun MockOauthDialog(
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                                 shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
+                                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("${platform}_auth_conn_button")
                             ) {
-                                Text(if (isArabic) "التحقق والربط الفني" else "Verify & Fast Link", fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(if (isArabic) "موافق، ربط ومزامنة القناة" else "Connect & Establish Handshake", fontWeight = FontWeight.Bold, color = Color.White)
                             }
+                        }
 
-                        } else {
-                            // Sandbox Simulation Mode Layout
+                        // SANDBOX MODE FORM
+                        else {
                             Text(
-                                text = if (isArabic) "بوابة المحاكاة والاختبار الفني السريع" else "Sandbox API Quick Simulation",
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                                textAlign = TextAlign.Center
-                            )
-
-                            Text(
-                                text = if (isArabic)
-                                    "رائع! هذا الخيار مخصص للاختبار المباشر والمحاكاة الفورية للنشر والتلقيم التلقائي دون مراجعات أمنية مطولة في لوحات المطورين الحقيقية. سيقوم النظام بإنشاء رمز محاكاة آمن:"
-                                    else "Allows instant preview and testing of downstream workflows without setup wait times. It generates safe simulated local credentials:",
+                                text = if (isArabic) 
+                                    "طريقة بديلة سريعة لاختبار واجهة العرض والمزامنة دون مفاتيح المطورين:" 
+                                    else "Test system sync & direct publishing loops utilizing fully simulated backend servers:",
                                 color = TextSoftColor,
                                 fontSize = 11.sp,
                                 textAlign = TextAlign.Center
@@ -1482,23 +1223,21 @@ fun MockOauthDialog(
                                     unfocusedContainerColor = ScreenBg
                                 ),
                                 shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth().testTag("${platform}_sandbox_field")
                             )
 
                             Button(
                                 onClick = {
                                     if (sandboxUsername.isBlank()) {
-                                        sandboxUsername = "@sandbox_user_" + (1000..9999).random()
+                                        sandboxUsername = "sandbox_user_" + (1000..9999).random()
                                     }
                                     step = 2
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                                 shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
+                                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("${platform}_sandbox_auth_btn")
                             ) {
-                                Text(if (isArabic) "توليد مفاتيح ومتابعة" else "Generate Sandbox Keys", fontWeight = FontWeight.Bold, color = Color.White)
+                                Text(if (isArabic) "توليد مفاتيح ومتابعة" else "Generate Sandbox Keys & Sync", fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
 
@@ -1566,14 +1305,15 @@ fun MockOauthDialog(
                                     } else {
                                         "sandbox_live_${platform}_" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
                                     }
-                                    onAuthorized(safeHandle, safeToken)
+                                    val finalClientKey = if (connectionMode == 1) clientId else "sandbox_key_${platform}"
+                                    val finalClientSecret = if (connectionMode == 1) clientSecret else "sandbox_secret_${platform}"
+
+                                    onAuthorized(safeHandle, safeToken, finalClientKey, finalClientSecret)
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                             shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
+                            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("${platform}_scopes_confirm_btn")
                         ) {
                             Text(if (isArabic) "موافق، منح الصلاحيات" else "Authorise & Establish Handshake", fontWeight = FontWeight.Bold, color = Color.White)
                         }
@@ -1615,4 +1355,3 @@ fun MockOauthDialog(
         }
     )
 }
-
