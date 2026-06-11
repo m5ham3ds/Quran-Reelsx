@@ -452,11 +452,19 @@ class VideoGenerator {
                 }
             }
             
+            val verseStartTimestampsUs = mutableListOf<Long>()
+            var currentStartUs = 0L
+            for (verse in verses) {
+                verseStartTimestampsUs.add(currentStartUs)
+                val frames = Math.round(verse.durationUs.toDouble() / (1000000L / 15).toDouble()).toInt().coerceAtLeast(1)
+                currentStartUs += frames * (1000000L / 15)
+            }
+            
             val audioThread = thread {
                 try {
-                    var audioPtsUs = 0L
-                    for (verse in verses) {
+                    for ((idx, verse) in verses.withIndex()) {
                         if (threadError != null) break
+                        val audioPtsUs = verseStartTimestampsUs[idx]
                         val ext = MediaExtractor().apply { setDataSource(verse.audioPath) }
                         ext.selectTrack(0)
                         val buf = ByteBuffer.allocate(1024 * 1024)
@@ -477,13 +485,14 @@ class VideoGenerator {
                             }
                             if (threadError != null) break
                             if (muxerStarted.get()) {
+                                buf.position(0)
+                                buf.limit(size)
                                 synchronized(finalMuxer) {
                                     finalMuxer.writeSampleData(audioTrackIdx, buf, info)
                                 }
                             }
                             ext.advance()
                         }
-                        audioPtsUs += verse.durationUs
                         ext.release()
                     }
                 } catch (e: Exception) {
@@ -492,7 +501,6 @@ class VideoGenerator {
                 }
             }
             
-            var videoPtsUs = 0L
             val fps = 15
             val frameDurationUs = 1000000L / fps
             
@@ -511,7 +519,8 @@ class VideoGenerator {
                     }
                 }
                 
-                val framesNeeded = Math.max(1, (verse.durationUs / frameDurationUs).toInt() + 1)
+                val framesNeeded = Math.round(verse.durationUs.toDouble() / frameDurationUs.toDouble()).toInt().coerceAtLeast(1)
+                val verseStartPts = verseStartTimestampsUs[idx]
                 
                 for (i in 0 until framesNeeded) {
                     checkCancellationAndPause()
@@ -528,7 +537,8 @@ class VideoGenerator {
                         }
                     }
                     
-                    val frameIndex = videoPtsUs / frameDurationUs
+                    val currentFramePts = verseStartPts + i * frameDurationUs
+                    val frameIndex = currentFramePts / frameDurationUs
                     val chunkedText = getActiveTextChunk(verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline, verse.wordSegments)
                     val chunkedTranslation = getActiveTranslationChunk(verse.translation, verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline, verse.wordSegments)
                     
@@ -562,8 +572,7 @@ class VideoGenerator {
                     
                     val img = encoder.getInputImage(inIdx)!!
                     fillImageFromBitmap(img, bitmap)
-                    encoder.queueInputBuffer(inIdx, 0, img.planes[0].buffer.capacity() * 3/2, videoPtsUs, 0)
-                    videoPtsUs += frameDurationUs
+                    encoder.queueInputBuffer(inIdx, 0, img.planes[0].buffer.capacity() * 3/2, currentFramePts, 0)
                     
                     bitmap.recycle()
                     bgFrameBitmap?.recycle()
@@ -579,7 +588,8 @@ class VideoGenerator {
                 }
                 eosIdx = encoder.dequeueInputBuffer(50000)
             }
-            encoder.queueInputBuffer(eosIdx, 0, 0, videoPtsUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+            val totalReelDurationUs = verseStartTimestampsUs.last() + Math.round(verses.last().durationUs.toDouble() / frameDurationUs.toDouble()).toInt().coerceAtLeast(1) * frameDurationUs
+            encoder.queueInputBuffer(eosIdx, 0, 0, totalReelDurationUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
             
             val drainCompleted = drainLatch.await(5, TimeUnit.MINUTES)
             if (!drainCompleted) {
@@ -753,10 +763,14 @@ class VideoGenerator {
         decoder.configure(inputFormat, null, null, 0)
         decoder.start()
         
-        // 2. Setup Encoder (AAC)
-        val sampleRate = if (inputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE) else 44100
-        val channelCount = if (inputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else 1
-        val outputFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, channelCount).apply {
+        // 2. Setup Encoder (AAC forced to 44100Hz Mono)
+        var sourceSampleRate = if (inputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) inputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE) else 44100
+        var sourceChannelCount = if (inputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) inputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT) else 1
+        
+        val targetSampleRate = 44100
+        val targetChannelCount = 1
+        
+        val outputFormat = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, targetSampleRate, targetChannelCount).apply {
             setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC)
             setInteger(MediaFormat.KEY_BIT_RATE, 64000)
             setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 1024 * 1024)
@@ -781,7 +795,7 @@ class VideoGenerator {
         
         while (!isEncoderEOS) {
             checkCancellationAndPause()
-
+ 
             // A. Read from extractor and feed decoder
             if (!isExtractorEOS) {
                 val inIdx = decoder.dequeueInputBuffer(timeoutUs)
@@ -801,7 +815,11 @@ class VideoGenerator {
             // B. Decode output into encoder input
             if (!isDecoderEOS) {
                 val outIdx = decoder.dequeueOutputBuffer(decoderBufferInfo, timeoutUs)
-                if (outIdx >= 0) {
+                if (outIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    val actualFormat = decoder.outputFormat
+                    sourceSampleRate = actualFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    sourceChannelCount = actualFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                } else if (outIdx >= 0) {
                     val buf = decoder.getOutputBuffer(outIdx)!!
                     val size = decoderBufferInfo.size
                     
@@ -825,7 +843,7 @@ class VideoGenerator {
                             e.printStackTrace()
                         }
                     }
-
+ 
                     var encInIdx = -1
                     while (encInIdx < 0 && !isDecoderEOS) {
                         checkCancellationAndPause()
@@ -859,16 +877,29 @@ class VideoGenerator {
                         val encBuf = encoder.getInputBuffer(encInIdx)!!
                         encBuf.clear()
                         if (size > 0) {
-                            buf.position(decoderBufferInfo.offset)
-                            buf.limit(decoderBufferInfo.offset + size)
-                            encBuf.put(buf)
+                            val resampledBuffer = resamplePCM(
+                                inputBuf = buf,
+                                inputSize = size,
+                                inputOffset = decoderBufferInfo.offset,
+                                srcSampleRate = sourceSampleRate,
+                                srcChannels = sourceChannelCount,
+                                dstSampleRate = targetSampleRate,
+                                dstChannels = targetChannelCount
+                            )
+                            encBuf.put(resampledBuffer)
+                            
+                            val flags = if ((decoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                isDecoderEOS = true
+                                MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                            } else 0
+                            encoder.queueInputBuffer(encInIdx, 0, resampledBuffer.limit(), decoderBufferInfo.presentationTimeUs, flags)
+                        } else {
+                            val flags = if ((decoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                                isDecoderEOS = true
+                                MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                            } else 0
+                            encoder.queueInputBuffer(encInIdx, 0, 0, decoderBufferInfo.presentationTimeUs, flags)
                         }
-                        
-                        val flags = if ((decoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                            isDecoderEOS = true
-                            MediaCodec.BUFFER_FLAG_END_OF_STREAM
-                        } else 0
-                        encoder.queueInputBuffer(encInIdx, 0, size, decoderBufferInfo.presentationTimeUs, flags)
                     }
                     decoder.releaseOutputBuffer(outIdx, false)
                 }
@@ -904,7 +935,7 @@ class VideoGenerator {
         try { encoder.stop(); encoder.release() } catch (e: Exception) {}
         try { if (muxerStarted) muxer.stop(); muxer.release() } catch (e: Exception) {}
         try { extractor.release() } catch (e: Exception) {}
-
+ 
         // Smooth energy with noise-gate threshold - lowered to 0.02f for maximum syllables tracking
         val peak = rawEnergySamples.maxOfOrNull { it.second } ?: 1f
         val gateThreshold = peak * 0.02f
@@ -1526,6 +1557,72 @@ class VideoGenerator {
             e.printStackTrace()
         }
         return SurahAudioData(segmentsMap, audioUrlsMap)
+    }
+
+    private fun resamplePCM(
+        inputBuf: ByteBuffer,
+        inputSize: Int,
+        inputOffset: Int,
+        srcSampleRate: Int,
+        srcChannels: Int,
+        dstSampleRate: Int,
+        dstChannels: Int
+    ): ByteBuffer {
+        val inPosition = inputBuf.position()
+        val inLimit = inputBuf.limit()
+        
+        inputBuf.position(inputOffset)
+        inputBuf.limit(inputOffset + inputSize)
+        
+        val shortBuf = inputBuf.asShortBuffer()
+        val totalInputShorts = shortBuf.remaining()
+        val inputShorts = ShortArray(totalInputShorts)
+        shortBuf.get(inputShorts)
+        
+        inputBuf.position(inPosition)
+        inputBuf.limit(inLimit)
+        
+        val inputFrames = totalInputShorts / srcChannels
+        if (inputFrames <= 0) return ByteBuffer.allocate(0)
+        
+        val monoSamples = FloatArray(inputFrames)
+        for (i in 0 until inputFrames) {
+            if (srcChannels == 1) {
+                monoSamples[i] = inputShorts[i].toFloat()
+            } else {
+                val ch0 = inputShorts[i * srcChannels].toFloat()
+                val ch1 = inputShorts[i * srcChannels + 1].toFloat()
+                monoSamples[i] = (ch0 + ch1) / 2f
+            }
+        }
+        
+        val scale = dstSampleRate.toDouble() / srcSampleRate.toDouble()
+        val outputFrames = (inputFrames * scale).toInt()
+        val resampledMono = FloatArray(outputFrames)
+        for (i in 0 until outputFrames) {
+            val srcIdx = i / scale
+            val index = srcIdx.toInt()
+            val frac = srcIdx - index
+            if (index >= inputFrames - 1) {
+                resampledMono[i] = monoSamples[inputFrames - 1]
+            } else {
+                val s0 = monoSamples[index]
+                val s1 = monoSamples[index + 1]
+                resampledMono[i] = s0 + frac.toFloat() * (s1 - s0)
+            }
+        }
+        
+        val totalOutputShorts = outputFrames * dstChannels
+        val outBytes = ByteBuffer.allocate(totalOutputShorts * 2).order(java.nio.ByteOrder.nativeOrder())
+        for (i in 0 until outputFrames) {
+            val sampleVal = resampledMono[i].coerceIn(-32768f, 32767f).toInt().toShort()
+            for (c in 0 until dstChannels) {
+                outBytes.putShort(sampleVal)
+            }
+        }
+        
+        outBytes.flip()
+        return outBytes
     }
 }
 
