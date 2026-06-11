@@ -977,28 +977,20 @@ class VideoGenerator {
         timeline: List<Pair<Long, Float>>,
         wordSegments: List<WordSegment>
     ): String {
-        val words = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        val rawWords = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        val words = rawWords.map { 
+            it.replace("ۗ", "")
+              .replace("ۖ", "")
+              .replace("ۚ", "")
+              .replace("ۘ", "")
+              .replace("ۙ", "")
+              .replace("ۛ", "")
+              .replace("۞", "")
+              .replace("۩", "")
+              .trim()
+        }.filter { it.isNotBlank() }
+        
         if (words.isEmpty()) return text
-        
-        // 1. Fallback to heuristic energy timeline if no word timing segments are available
-        if (wordSegments.isEmpty()) {
-            if (words.size <= 5) return text
-            val chunkSize = if (words.size <= 8) 4 else 5
-            val chunks = mutableListOf<String>()
-            var i = 0
-            while (i < words.size) {
-                val end = Math.min(i + chunkSize, words.size)
-                chunks.add(words.subList(i, end).joinToString(" "))
-                i += chunkSize
-            }
-            if (chunks.isEmpty()) return text
-            val ratio = getCumulativeEnergyRatio(currentFrame, totalFrames, durationUs, timeline)
-            val chunkIdx = (ratio * chunks.size).toInt().coerceIn(0, chunks.size - 1)
-            return chunks[chunkIdx]
-        }
-        
-        // 2. We have absolute word-by-word segments from Quran.com API v4!
-        val currentTimeMs = ((currentFrame.toFloat() / totalFrames.toFloat()) * durationUs) / 1000
         
         // Let's group words into dynamic chunks of max 5 words to keep subtitles clean & legible
         val maxWordsInChunk = 5
@@ -1015,34 +1007,56 @@ class VideoGenerator {
             chunks.add(currentChunk)
         }
         
-        fun getWordStartTime(wordIdx: Int): Long {
-            val seg = wordSegments.find { it.wordIndex == wordIdx + 1 }
-            return seg?.startTimeMs ?: 0L
+        // Offset shift to guarantee word segments start at 0
+        val adjustedWordSegments = if (wordSegments.isNotEmpty()) {
+            val sortedRaw = wordSegments.sortedBy { it.startTimeMs }
+            val firstStart = sortedRaw.first().startTimeMs
+            sortedRaw.map { 
+                WordSegment(
+                    wordIndex = it.wordIndex,
+                    startTimeMs = (it.startTimeMs - firstStart).coerceAtLeast(0L),
+                    endTimeMs = (it.endTimeMs - firstStart).coerceAtLeast(0L)
+                )
+            }
+        } else {
+            emptyList()
         }
         
-        var activeChunkIdx = 0
-        for (cIdx in chunks.indices) {
-            val firstWordIdxInChunk = chunks[cIdx].first()
-            val chunkStartMs = getWordStartTime(firstWordIdxInChunk)
-            if (currentTimeMs >= chunkStartMs) {
-                activeChunkIdx = cIdx
+        fun getWordStartTime(wordIdx: Int): Long {
+            val seg = adjustedWordSegments.find { it.wordIndex == wordIdx + 1 }
+            if (seg != null) return seg.startTimeMs
+            
+            // Interpolation fallback if timing is missing
+            if (wordIdx == 0) return 0L
+            for (prevIdx in (wordIdx - 1) downTo 0) {
+                val prevSeg = adjustedWordSegments.find { it.wordIndex == prevIdx + 1 }
+                if (prevSeg != null) {
+                    return prevSeg.endTimeMs + (wordIdx - prevIdx - 1) * 350L
+                }
             }
+            return 350L * wordIdx
+        }
+        
+        val currentTimeMs = ((currentFrame.toFloat() / totalFrames.toFloat()) * durationUs) / 1000
+        var activeChunkIdx = 0
+        
+        if (adjustedWordSegments.isNotEmpty()) {
+            for (cIdx in chunks.indices) {
+                val firstWordIdxInChunk = chunks[cIdx].first()
+                val chunkStartMs = getWordStartTime(firstWordIdxInChunk)
+                if (currentTimeMs >= chunkStartMs) {
+                    activeChunkIdx = cIdx
+                }
+            }
+        } else {
+            // Predictable stable linear timing fallback (no freeze, no stuck)
+            val ratio = currentFrame.toFloat() / totalFrames.toFloat()
+            activeChunkIdx = (ratio * chunks.size).toInt().coerceIn(0, chunks.size - 1)
         }
         
         val activeChunkWordIndices = chunks[activeChunkIdx]
-        val visibleWords = mutableListOf<String>()
-        for (wordIdx in activeChunkWordIndices) {
-            val startMs = getWordStartTime(wordIdx)
-            if (currentTimeMs >= startMs) {
-                visibleWords.add(words[wordIdx])
-            }
-        }
-        
-        if (visibleWords.isEmpty() && activeChunkWordIndices.isNotEmpty()) {
-            visibleWords.add(words[activeChunkWordIndices.first()])
-        }
-        
-        return visibleWords.joinToString(" ")
+        val chunkWords = activeChunkWordIndices.map { words[it] }
+        return chunkWords.joinToString(" ")
     }
 
     private fun getActiveTranslationChunk(
@@ -1055,44 +1069,29 @@ class VideoGenerator {
         wordSegments: List<WordSegment>
     ): String? {
         if (translation == null) return null
-        val wordsOrig = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
-        if (wordsOrig.isEmpty()) return translation
+        val rawWords = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        val words = rawWords.map { 
+            it.replace("ۗ", "")
+              .replace("ۖ", "")
+              .replace("ۚ", "")
+              .replace("ۘ", "")
+              .replace("ۙ", "")
+              .replace("ۛ", "")
+              .replace("۞", "")
+              .replace("۩", "")
+              .trim()
+        }.filter { it.isNotBlank() }
+        
+        if (words.isEmpty()) return translation
         
         val transWords = translation.split("\\s+".toRegex()).filter { it.isNotBlank() }
         if (transWords.size <= 6) return translation
         
-        // 1. Fallback to energy timeline if no word timing segments are available
-        if (wordSegments.isEmpty()) {
-            val chunkSize = if (wordsOrig.size <= 8) 4 else 5
-            var quranChunksCount = 0
-            var i = 0
-            while (i < wordsOrig.size) {
-                quranChunksCount++
-                i += chunkSize
-            }
-            if (quranChunksCount <= 1) return translation
-            val wordsPerTransChunk = Math.ceil(transWords.size.toDouble() / quranChunksCount.toDouble()).toInt().coerceAtLeast(1)
-            val transChunks = mutableListOf<String>()
-            var tIdx = 0
-            while (tIdx < transWords.size) {
-                val end = Math.min(tIdx + wordsPerTransChunk, transWords.size)
-                transChunks.add(transWords.subList(tIdx, end).joinToString(" "))
-                tIdx += wordsPerTransChunk
-            }
-            val ratio = getCumulativeEnergyRatio(currentFrame, totalFrames, durationUs, timeline)
-            val chunkIdx = (ratio * quranChunksCount).toInt().coerceIn(0, quranChunksCount - 1)
-            if (chunkIdx < transChunks.size) {
-                return transChunks[chunkIdx]
-            }
-            return transChunks.lastOrNull() ?: translation
-        }
-        
-        // 2. Use Quran.com absolute segments for perfect cohesion!
-        val currentTimeMs = ((currentFrame.toFloat() / totalFrames.toFloat()) * durationUs) / 1000
-        
+        // 1. Setup chunks layout
         val maxWordsInChunk = 5
-        val chunksCount = Math.ceil(wordsOrig.size.toDouble() / maxWordsInChunk.toDouble()).toInt().coerceAtLeast(1)
+        val chunksCount = Math.ceil(words.size.toDouble() / maxWordsInChunk.toDouble()).toInt().coerceAtLeast(1)
         
+        // Split translation proportionally into chunksCount parts
         val wordsPerTransChunk = Math.ceil(transWords.size.toDouble() / chunksCount.toDouble()).toInt().coerceAtLeast(1)
         val transChunks = mutableListOf<String>()
         var tIdx = 0
@@ -1102,15 +1101,52 @@ class VideoGenerator {
             tIdx += wordsPerTransChunk
         }
         
-        var activeChunkIdx = 0
-        for (cIdx in 0 until chunksCount) {
-            val firstWordIdxInChunk = cIdx * maxWordsInChunk
-            val firstWordIdxInChunkCoerced = firstWordIdxInChunk.coerceAtMost(wordsOrig.size - 1)
-            val seg = wordSegments.find { it.wordIndex == firstWordIdxInChunkCoerced + 1 }
-            val chunkStartMs = seg?.startTimeMs ?: 0L
-            if (currentTimeMs >= chunkStartMs) {
-                activeChunkIdx = cIdx
+        // 2. Adjust segments offset (if any)
+        val adjustedWordSegments = if (wordSegments.isNotEmpty()) {
+            val sortedRaw = wordSegments.sortedBy { it.startTimeMs }
+            val firstStart = sortedRaw.first().startTimeMs
+            sortedRaw.map { 
+                WordSegment(
+                    wordIndex = it.wordIndex,
+                    startTimeMs = (it.startTimeMs - firstStart).coerceAtLeast(0L),
+                    endTimeMs = (it.endTimeMs - firstStart).coerceAtLeast(0L)
+                )
             }
+        } else {
+            emptyList()
+        }
+        
+        fun getWordStartTime(wordIdx: Int): Long {
+            val seg = adjustedWordSegments.find { it.wordIndex == wordIdx + 1 }
+            if (seg != null) return seg.startTimeMs
+            
+            // Interpolation
+            if (wordIdx == 0) return 0L
+            for (prevIdx in (wordIdx - 1) downTo 0) {
+                val prevSeg = adjustedWordSegments.find { it.wordIndex == prevIdx + 1 }
+                if (prevSeg != null) {
+                    return prevSeg.endTimeMs + (wordIdx - prevIdx - 1) * 350L
+                }
+            }
+            return 350L * wordIdx
+        }
+        
+        // 3. Find active chunk index
+        val currentTimeMs = ((currentFrame.toFloat() / totalFrames.toFloat()) * durationUs) / 1000
+        var activeChunkIdx = 0
+        
+        if (adjustedWordSegments.isNotEmpty()) {
+            for (cIdx in 0 until chunksCount) {
+                val firstWordIdxInChunk = cIdx * maxWordsInChunk
+                val firstWordIdxInChunkCoerced = firstWordIdxInChunk.coerceAtMost(words.size - 1)
+                val chunkStartMs = getWordStartTime(firstWordIdxInChunkCoerced)
+                if (currentTimeMs >= chunkStartMs) {
+                    activeChunkIdx = cIdx
+                }
+            }
+        } else {
+            val ratio = currentFrame.toFloat() / totalFrames.toFloat()
+            activeChunkIdx = (ratio * chunksCount).toInt().coerceIn(0, chunksCount - 1)
         }
         
         if (activeChunkIdx < transChunks.size) {
