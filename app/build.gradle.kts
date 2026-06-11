@@ -49,7 +49,12 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug {
-      signingConfig = signingConfigs.getByName("debugConfig")
+      val kFile = file("${rootDir}/debug.keystore")
+      signingConfig = if (kFile.exists()) {
+        signingConfigs.getByName("debugConfig")
+      } else {
+        signingConfigs.getByName("debug")
+      }
     }
   }
   compileOptions {
