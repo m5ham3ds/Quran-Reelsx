@@ -95,185 +95,10 @@ class VideoGenerator {
             val translationColorStr = settingsManager.translationColor.first()
             val pixabayApiKey = settingsManager.pixabayApiKey.first()
             
-            // 2. Fetch Cinematic Background Portrait Video clip if Pexels or Pixabay API key is provided
-            var videoLoaded = false
-            val downloadedVideoFiles = mutableListOf<File>()
-            
-            if (!isRetry) {
-                try {
-                    val files = context.cacheDir.listFiles()
-                    files?.forEach { f ->
-                        if (f.name.startsWith("bg_video_") && f.name.endsWith(".mp4")) {
-                            f.delete()
-                        }
-                    }
-                } catch (ex: Exception) {}
-            }
-            
-            if (pexelsApiKey.isNotBlank()) {
-                onProgress(if (isArabic) "جاري البحث عن مناظر طبيعية سينمائية خلابة (Pexels)..." else "Searching for breathtaking nature landscapes (Pexels)...", 0.05f)
-                try {
-                    val pexelsQueries = listOf(
-                        "epic+drone+mountains+scenic",
-                        "breathtaking+green+hills+aerial",
-                        "towering+peaks+drone+landscape",
-                        "serene+majestic+mountains+drone",
-                        "peaceful+aerial+green+hills",
-                        "luxurious+misty+mountain+forests"
-                    )
-                    val chosenQuery = pexelsQueries.random()
-                    val requestUrl = "https://api.pexels.com/videos/search?query=$chosenQuery&orientation=portrait&per_page=15"
-                    val request = Request.Builder()
-                        .url(requestUrl)
-                        .addHeader("Authorization", pexelsApiKey)
-                        .build()
-                    val response = client.newCall(request).execute()
-                    if (response.isSuccessful) {
-                        val body = response.body?.string() ?: ""
-                        val json = JSONObject(body)
-                        val videos = json.getJSONArray("videos")
-                        if (videos.length() > 0) {
-                            val countToLoad = Math.min(totalAyahs, videos.length())
-                            for (vidIdx in 0 until countToLoad) {
-                                val randomVideo = videos.getJSONObject(vidIdx)
-                                val videoFiles = randomVideo.getJSONArray("video_files")
-                                
-                                var selectedVideoUrl: String? = null
-                                for (v in 0 until videoFiles.length()) {
-                                    val fileObj = videoFiles.getJSONObject(v)
-                                    val link = fileObj.getString("link")
-                                    val width = fileObj.optInt("width", 0)
-                                    val height = fileObj.optInt("height", 0)
-                                    if (width < height && link.contains("mp4", ignoreCase = true)) {
-                                        selectedVideoUrl = link
-                                        break
-                                    }
-                                }
-                                if (selectedVideoUrl == null && videoFiles.length() > 0) {
-                                    for (v in 0 until videoFiles.length()) {
-                                        val fileObj = videoFiles.getJSONObject(v)
-                                        val link = fileObj.getString("link")
-                                        if (link.contains("mp4", ignoreCase = true)) {
-                                            selectedVideoUrl = link
-                                            break
-                                        }
-                                    }
-                                }
-                                if (selectedVideoUrl == null && videoFiles.length() > 0) {
-                                    selectedVideoUrl = videoFiles.getJSONObject(0).getString("link")
-                                }
-                                
-                                if (selectedVideoUrl != null) {
-                                    onProgress(
-                                        if (isArabic) "جاري تحميل مشهد سينمائي ${vidIdx + 1} من $countToLoad..." else "Downloading cinematic scene ${vidIdx + 1} of $countToLoad...",
-                                        0.05f + (vidIdx * 0.05f / countToLoad)
-                                    )
-                                    val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
-                                    downloadAudio(selectedVideoUrl, targetFile)
-                                    downloadedVideoFiles.add(targetFile)
-                                }
-                            }
-                            if (downloadedVideoFiles.isNotEmpty()) {
-                                videoLoaded = true
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-            
-            if (!videoLoaded && pixabayApiKey.isNotBlank()) {
-                onProgress(if (isArabic) "جاري البحث عن مناظر طبيعية سينمائية هادئة (Pixabay)..." else "Searching for peaceful nature landscapes (Pixabay)...", 0.05f)
-                try {
-                    val pixabayQueries = listOf(
-                        "drone+mountains+scenic",
-                        "aerial+green+hills",
-                        "epic+nature+peaks+drone",
-                        "peaceful+green+valleys",
-                        "beautiful+aerial+forests"
-                    )
-                    val chosenPixabayQuery = pixabayQueries.random()
-                    val request = Request.Builder()
-                        .url("https://pixabay.com/api/videos/?key=$pixabayApiKey&q=$chosenPixabayQuery&orientation=vertical&per_page=15")
-                        .build()
-                    val response = client.newCall(request).execute()
-                    if (response.isSuccessful) {
-                        val body = response.body?.string() ?: ""
-                        val json = JSONObject(body)
-                        val hits = json.getJSONArray("hits")
-                        if (hits.length() > 0) {
-                            val countToLoad = Math.min(totalAyahs, hits.length())
-                            for (vidIdx in 0 until countToLoad) {
-                                val randomHit = hits.getJSONObject(vidIdx)
-                                val videosObj = randomHit.getJSONObject("videos")
-                                val sizeKeys = listOf("medium", "small", "large", "tiny")
-                                var selectedVideoUrl: String? = null
-                                for (key in sizeKeys) {
-                                    if (videosObj.has(key)) {
-                                        val vObj = videosObj.getJSONObject(key)
-                                        val url = vObj.getString("url")
-                                        if (url.isNotBlank()) {
-                                            selectedVideoUrl = url
-                                            break
-                                        }
-                                    }
-                                }
-                                if (selectedVideoUrl != null) {
-                                    onProgress(
-                                        if (isArabic) "جاري تحميل مشهد سينمائي ${vidIdx + 1} من $countToLoad..." else "Downloading cinematic scene ${vidIdx + 1} of $countToLoad...",
-                                        0.05f + (vidIdx * 0.05f / countToLoad)
-                                    )
-                                    val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
-                                    downloadAudio(selectedVideoUrl, targetFile)
-                                    downloadedVideoFiles.add(targetFile)
-                                }
-                            }
-                            if (downloadedVideoFiles.isNotEmpty()) {
-                                videoLoaded = true
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-            
-            // Fallback to high-quality direct public video CDN loop URLs so we NEVER show a blank background or static image
-            if (!videoLoaded) {
-                onProgress(if (isArabic) "جاري تحميل مشاهد طبيعية متحركة عالية الجودة..." else "Downloading premium cinematic video loops...", 0.05f)
-                val directUrls = listOf(
-                    "https://assets.mixkit.co/videos/preview/mixkit-vertical-shot-of-a-beautiful-waterfall-in-a-forest-43756-large.mp4",
-                    "https://assets.mixkit.co/videos/preview/mixkit-forest-stream-in-vertical-shot-44445-large.mp4",
-                    "https://assets.mixkit.co/videos/preview/mixkit-waves-crashing-on-a-sandy-beach-from-above-41793-large.mp4",
-                    "https://assets.mixkit.co/videos/preview/mixkit-vertical-shot-of-the-sea-under-a-clear-sky-40767-large.mp4",
-                    "https://assets.mixkit.co/videos/preview/mixkit-light-rain-falling-on-green-leaves-vertical-shot-42022-large.mp4"
-                )
-                val countToLoad = Math.min(totalAyahs, directUrls.size)
-                for (vidIdx in 0 until countToLoad) {
-                    try {
-                        onProgress(
-                            if (isArabic) "جاري تحميل مشهد سينمائي عالي الجودة ${vidIdx + 1} من $countToLoad..." else "Loading cinematic nature loop ${vidIdx + 1} of $countToLoad...",
-                            0.05f + (vidIdx * 0.05f / countToLoad)
-                        )
-                        val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
-                        downloadAudio(directUrls[vidIdx], targetFile)
-                        if (targetFile.exists() && targetFile.length() > 0) {
-                            downloadedVideoFiles.add(targetFile)
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-                if (downloadedVideoFiles.isNotEmpty()) {
-                    videoLoaded = true
-                }
-            }
-            
-            // 3. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
+            // 2. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
             for (i in 0 until totalAyahs) {
                 val ayah = startAyah + i
-                onProgress(if (isArabic) "جاري تحميل الآية $ayah وحفظ مراجع الصوت..." else "Downloading reference audio for Ayah $ayah...", 0.1f + (i * 0.4f / totalAyahs))
+                onProgress(if (isArabic) "جاري تحميل الآية $ayah وحفظ مراجع الصوت..." else "Downloading reference audio for Ayah $ayah...", 0.05f + (i * 0.2f / totalAyahs))
                 
                 val verseInfo = fetchVerseInfo(surah, ayah, "quran-uthmani")
                 val text = verseInfo.first
@@ -286,7 +111,7 @@ class VideoGenerator {
                 
                 downloadAudio(url, destFile)
                 
-                onProgress(if (isArabic) "جاري ترميز ملف الصوت بدقة سينمائية..." else "Encoding audio block dynamically...", 0.15f + (i * 0.4f / totalAyahs))
+                onProgress(if (isArabic) "جاري ترميز ملف الصوت بدقة سينمائية..." else "Encoding audio block dynamically...", 0.08f + (i * 0.2f / totalAyahs))
                 val aacFileName = "${reciterId}_${surah}_${ayah}_transcoded.m4a"
                 val aacFile = File(context.cacheDir, aacFileName)
                 val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
@@ -305,6 +130,222 @@ class VideoGenerator {
                 }
                 ext.release()
                 verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs, timeline))
+            }
+            
+            // 3. Fetch Cinematic Background Portrait Video clip if Pexels or Pixabay API key is provided
+            var videoLoaded = false
+            val downloadedVideoFiles = mutableListOf<File>()
+            
+            if (!isRetry) {
+                try {
+                    val files = context.cacheDir.listFiles()
+                    files?.forEach { f ->
+                        if (f.name.startsWith("bg_video_") && f.name.endsWith(".mp4")) {
+                            f.delete()
+                        }
+                    }
+                } catch (ex: Exception) {}
+            }
+            
+            if (pexelsApiKey.isNotBlank()) {
+                onProgress(if (isArabic) "جاري البحث عن مشاهد سينمائية سريعة (Pexels)..." else "Searching for dynamic fast-paced cinematic scenes (Pexels)...", 0.3f)
+                try {
+                    val pexelsQueries = listOf(
+                        "cinematic+drone+fast+flight+nature",
+                        "speed+drone+flyby+waterfall",
+                        "dynamic+fpv+drone+mountains",
+                        "epic+aerial+coastline+waves+motion",
+                        "cinematic+sunset+landscape+timelapse",
+                        "clouds+hyperlapse+epic+mountain"
+                    )
+                    val chosenQuery = pexelsQueries.random()
+                    val requestUrl = "https://api.pexels.com/videos/search?query=$chosenQuery&orientation=portrait&per_page=30"
+                    val request = Request.Builder()
+                        .url(requestUrl)
+                        .addHeader("Authorization", pexelsApiKey)
+                        .build()
+                    val response = client.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: ""
+                        val json = JSONObject(body)
+                        val videos = json.getJSONArray("videos")
+                        if (videos.length() > 0) {
+                            val availableVideosList = mutableListOf<JSONObject>()
+                            for (vIdx in 0 until videos.length()) {
+                                availableVideosList.add(videos.getJSONObject(vIdx))
+                            }
+                            
+                            for (vidIdx in 0 until totalAyahs) {
+                                val verse = verses[vidIdx]
+                                val neededDurSec = (verse.durationUs / 1000000L).toInt() + 2
+                                
+                                // Try to find a video with duration >= neededDurSec, otherwise find the longest video
+                                var selectedVideoJson = availableVideosList.filter {
+                                    it.optInt("duration", 0) >= neededDurSec
+                                }.minByOrNull { it.optInt("duration", 0) }
+                                
+                                if (selectedVideoJson == null) {
+                                    selectedVideoJson = availableVideosList.maxByOrNull { it.optInt("duration", 0) }
+                                }
+                                
+                                if (selectedVideoJson != null) {
+                                    // Remove selected video from lists to maintain variety
+                                    if (availableVideosList.size > 1) {
+                                        availableVideosList.remove(selectedVideoJson)
+                                    }
+                                    
+                                    val videoFiles = selectedVideoJson.getJSONArray("video_files")
+                                    var selectedVideoUrl: String? = null
+                                    for (v in 0 until videoFiles.length()) {
+                                        val fileObj = videoFiles.getJSONObject(v)
+                                        val link = fileObj.getString("link")
+                                        val width = fileObj.optInt("width", 0)
+                                        val height = fileObj.optInt("height", 0)
+                                        if (width < height && link.contains("mp4", ignoreCase = true)) {
+                                            selectedVideoUrl = link
+                                            break
+                                        }
+                                    }
+                                    if (selectedVideoUrl == null && videoFiles.length() > 0) {
+                                        for (v in 0 until videoFiles.length()) {
+                                            val fileObj = videoFiles.getJSONObject(v)
+                                            val link = fileObj.getString("link")
+                                            if (link.contains("mp4", ignoreCase = true)) {
+                                                selectedVideoUrl = link
+                                                break
+                                            }
+                                        }
+                                    }
+                                    if (selectedVideoUrl == null && videoFiles.length() > 0) {
+                                        selectedVideoUrl = videoFiles.getJSONObject(0).getString("link")
+                                    }
+                                    
+                                    if (selectedVideoUrl != null) {
+                                        onProgress(
+                                            if (isArabic) "جاري تحميل مشهد متناسق للمقطع ${vidIdx + 1} من $totalAyahs..." else "Downloading duration-matched scene ${vidIdx + 1} of $totalAyahs...",
+                                            0.35f + (vidIdx * 0.15f / totalAyahs)
+                                        )
+                                        val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
+                                        downloadAudio(selectedVideoUrl, targetFile)
+                                        downloadedVideoFiles.add(targetFile)
+                                    }
+                                }
+                            }
+                            if (downloadedVideoFiles.isNotEmpty()) {
+                                videoLoaded = true
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            
+            if (!videoLoaded && pixabayApiKey.isNotBlank()) {
+                onProgress(if (isArabic) "جاري البحث عن مناظر طبيعية هادئة سريعة (Pixabay)..." else "Searching for active nature landscapes (Pixabay)...", 0.3f)
+                try {
+                    val pixabayQueries = listOf(
+                        "fpv+drone+nature+fast",
+                        "timelapse+clouds+mountains",
+                        "cinematic+waterfall+rapid+aerial",
+                        "epic+mountain+drone+flyover",
+                        "ocean+waves+stormy+aerial"
+                    )
+                    val chosenPixabayQuery = pixabayQueries.random()
+                    val request = Request.Builder()
+                        .url("https://pixabay.com/api/videos/?key=$pixabayApiKey&q=$chosenPixabayQuery&orientation=vertical&per_page=30")
+                        .build()
+                    val response = client.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: ""
+                        val json = JSONObject(body)
+                        val hits = json.getJSONArray("hits")
+                        if (hits.length() > 0) {
+                            val availableHitsList = mutableListOf<JSONObject>()
+                            for (hIdx in 0 until hits.length()) {
+                                availableHitsList.add(hits.getJSONObject(hIdx))
+                            }
+                            
+                            for (vidIdx in 0 until totalAyahs) {
+                                val verse = verses[vidIdx]
+                                val neededDurSec = (verse.durationUs / 1000000L).toInt() + 2
+                                
+                                var selectedHit = availableHitsList.filter {
+                                    it.optInt("duration", 0) >= neededDurSec
+                                }.minByOrNull { it.optInt("duration", 0) }
+                                
+                                if (selectedHit == null) {
+                                    selectedHit = availableHitsList.maxByOrNull { it.optInt("duration", 0) }
+                                }
+                                
+                                if (selectedHit != null) {
+                                    if (availableHitsList.size > 1) {
+                                        availableHitsList.remove(selectedHit)
+                                    }
+                                    
+                                    val videosObj = selectedHit.getJSONObject("videos")
+                                    val sizeKeys = listOf("medium", "small", "large", "tiny")
+                                    var selectedVideoUrl: String? = null
+                                    for (key in sizeKeys) {
+                                        if (videosObj.has(key)) {
+                                            val vObj = videosObj.getJSONObject(key)
+                                            val url = vObj.getString("url")
+                                            if (url.isNotBlank()) {
+                                                selectedVideoUrl = url
+                                                break
+                                            }
+                                        }
+                                    }
+                                    if (selectedVideoUrl != null) {
+                                        onProgress(
+                                            if (isArabic) "جاري تحميل مشهد متناسق للمقطع ${vidIdx + 1} من $totalAyahs..." else "Downloading duration-matched scene ${vidIdx + 1} of $totalAyahs...",
+                                            0.35f + (vidIdx * 0.15f / totalAyahs)
+                                        )
+                                        val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
+                                        downloadAudio(selectedVideoUrl, targetFile)
+                                        downloadedVideoFiles.add(targetFile)
+                                    }
+                                }
+                            }
+                            if (downloadedVideoFiles.isNotEmpty()) {
+                                videoLoaded = true
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            
+            // Fallback to high-quality direct public video CDN loop URLs so we NEVER show a blank background or static image
+            if (!videoLoaded) {
+                onProgress(if (isArabic) "جاري تحميل مشاهد طبيعية متحركة عالية الجودة..." else "Downloading premium cinematic video loops...", 0.3f)
+                val directUrls = listOf(
+                    "https://assets.mixkit.co/videos/preview/mixkit-vertical-shot-of-a-beautiful-waterfall-in-a-forest-43756-large.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-forest-stream-in-vertical-shot-44445-large.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-waves-crashing-on-a-sandy-beach-from-above-41793-large.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-vertical-shot-of-the-sea-under-a-clear-sky-40767-large.mp4",
+                    "https://assets.mixkit.co/videos/preview/mixkit-light-rain-falling-on-green-leaves-vertical-shot-42022-large.mp4"
+                )
+                val countToLoad = Math.min(totalAyahs, directUrls.size)
+                for (vidIdx in 0 until countToLoad) {
+                    try {
+                        onProgress(
+                            if (isArabic) "جاري تحميل مشهد سينمائي عالي الجودة ${vidIdx + 1} من $countToLoad..." else "Loading cinematic nature loop ${vidIdx + 1} of $countToLoad...",
+                            0.35f + (vidIdx * 0.15f / countToLoad)
+                        )
+                        val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
+                        downloadAudio(directUrls[vidIdx], targetFile)
+                        if (targetFile.exists() && targetFile.length() > 0) {
+                            downloadedVideoFiles.add(targetFile)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                if (downloadedVideoFiles.isNotEmpty()) {
+                    videoLoaded = true
+                }
             }
             
             onProgress(if (isArabic) "جاري تهيئة معالجات المقطع..." else "Initializing video filters...", 0.5f)
@@ -858,22 +899,48 @@ class VideoGenerator {
             return currentFrame.toFloat() / totalFrames.toFloat()
         }
         
+        // Find peak energy to determine noise gate threshold to identify active speech boundaries
+        val peak = timeline.maxOfOrNull { it.second } ?: 1f
+        val activeThreshold = peak * 0.04f // 4% threshold for active voice detection
+        
+        val firstActiveIdx = timeline.indexOfFirst { it.second > activeThreshold }.coerceAtLeast(0)
+        val lastActiveIdx = timeline.indexOfLast { it.second > activeThreshold }.coerceAtLeast(0).coerceAtMost(timeline.size - 1)
+        
+        val startSpeechUs = timeline[firstActiveIdx].first
+        val endSpeechUs = timeline[lastActiveIdx].first
+        val activeDurationUs = endSpeechUs - startSpeechUs
+        
         val currentTimeUs = (currentFrame.toFloat() / totalFrames.toFloat()) * durationUs
+        
+        // Before active speech has begun
+        if (currentTimeUs < startSpeechUs) {
+            return 0.0f
+        }
+        // After active speech has concluded
+        if (currentTimeUs > endSpeechUs) {
+            return 1.0f
+        }
+        
+        if (activeDurationUs <= 0L) {
+            return (currentTimeUs - startSpeechUs).toFloat() / Math.max(1f, durationUs.toFloat())
+        }
         
         var totalEnergy = 0f
         var cumulativeEnergy = 0f
         
         for (sample in timeline) {
-            totalEnergy += sample.second
-            if (sample.first <= currentTimeUs) {
-                cumulativeEnergy += sample.second
+            if (sample.first >= startSpeechUs && sample.first <= endSpeechUs) {
+                totalEnergy += sample.second
+                if (sample.first <= currentTimeUs) {
+                    cumulativeEnergy += sample.second
+                }
             }
         }
         
         return if (totalEnergy > 0f) {
             cumulativeEnergy / totalEnergy
         } else {
-            currentFrame.toFloat() / totalFrames.toFloat()
+            (currentTimeUs - startSpeechUs).toFloat() / activeDurationUs.toFloat()
         }
     }
 
@@ -976,7 +1043,33 @@ class VideoGenerator {
             val src = android.graphics.Rect(0, 0, bgBitmap.width, bgBitmap.height)
             val dst = android.graphics.Rect(0, 0, 720, 1280)
             canvas.drawBitmap(bgBitmap, src, dst, null)
-            canvas.drawColor(Color.argb(140, 0, 0, 0))
+            
+            // Apply dual layers of premium dark mysterious gradient filters!
+            // Layer A: Vertical dark-gold/violet linear shadow gradient
+            val verticalGrad = android.graphics.LinearGradient(
+                0f, 0f, 0f, 1280f,
+                intArrayOf(Color.argb(210, 10, 14, 23), Color.argb(120, 20, 16, 26), Color.argb(240, 6, 8, 14)),
+                null,
+                Shader.TileMode.CLAMP
+            )
+            val verticalPaint = Paint().apply { shader = verticalGrad }
+            canvas.drawRect(0f, 0f, 720f, 1280f, verticalPaint)
+
+            // Layer B: Dramatic dark spotlight radial vignette centering the Quranic Verses
+            val vignetteColors = intArrayOf(
+                Color.argb(0, 0, 0, 0),        // Clear center
+                Color.argb(120, 4, 3, 5),      // Soft shadow
+                Color.argb(230, 2, 2, 3)       // Deep cosmic vignette edge
+            )
+            val vignetteOffsets = floatArrayOf(0.35f, 0.75f, 1.0f)
+            val vignetteGrad = android.graphics.RadialGradient(
+                360f, 640f, 760f,
+                vignetteColors,
+                vignetteOffsets,
+                Shader.TileMode.CLAMP
+            )
+            val vignettePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = vignetteGrad }
+            canvas.drawRect(0f, 0f, 720f, 1280f, vignettePaint)
         } else {
             // Draw a gorgeous dynamic animated gradient background!
             val grad = android.graphics.LinearGradient(
