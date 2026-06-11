@@ -400,7 +400,7 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
+        contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { _ -> }
 
     // Load initial values from settings on start
@@ -725,14 +725,20 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                     if (state is ReelState.Idle || state is ReelState.Error || state is ReelState.Success) {
                         Button(
                             onClick = {
-                                val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.POST_NOTIFICATIONS
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                } else {
-                                    true
+                                val permissionsNeeded = mutableListOf<String>()
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                                        permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
                                 }
+                                try {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                                        permissionsNeeded.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                    }
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                                        permissionsNeeded.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+                                    }
+                                } catch (e: Exception) {}
 
                                 val onGenerateAction = {
                                     val start = startAyahText.toIntOrNull() ?: 1
@@ -751,8 +757,8 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                     )
                                 }
 
-                                if (!hasNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                if (permissionsNeeded.isNotEmpty()) {
+                                    permissionLauncher.launch(permissionsNeeded.toTypedArray())
                                     onGenerateAction()
                                 } else {
                                     onGenerateAction()
@@ -767,6 +773,9 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                 .height(56.dp)
                                 .testTag("generate_btn"),
                             shape = RoundedCornerShape(12.dp)
+
+
+
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
