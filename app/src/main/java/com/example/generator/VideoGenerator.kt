@@ -35,12 +35,24 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
+data class WordSegment(
+    val wordIndex: Int,
+    val startTimeMs: Long,
+    val endTimeMs: Long
+)
+
+data class SurahAudioData(
+    val segments: Map<Int, List<WordSegment>>,
+    val audioUrls: Map<Int, String>
+)
+
 data class VerseData(
     val text: String,
     val translation: String?,
     val audioPath: String,
     val durationUs: Long,
-    val energyTimeline: List<Pair<Long, Float>>
+    val energyTimeline: List<Pair<Long, Float>>,
+    val wordSegments: List<WordSegment> = emptyList()
 )
 
 class VideoGenerator {
@@ -96,6 +108,14 @@ class VideoGenerator {
             val pixabayApiKey = settingsManager.pixabayApiKey.first()
             
             // 2. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
+            val quranComId = mapReciterIdToQuranComId(reciterId)
+            onProgress(if (isArabic) "جاري جلب تواقيت الكلمات بدقة احترافية..." else "Fetching high-precision word timings from Quran.com...", 0.04f)
+            val surahAudioData = try {
+                fetchSegmentsForSurah(quranComId, surah)
+            } catch (e: Exception) {
+                SurahAudioData(emptyMap(), emptyMap())
+            }
+
             for (i in 0 until totalAyahs) {
                 val ayah = startAyah + i
                 onProgress(if (isArabic) "جاري تحميل الآية $ayah وحفظ مراجع الصوت..." else "Downloading reference audio for Ayah $ayah...", 0.05f + (i * 0.2f / totalAyahs))
@@ -106,7 +126,12 @@ class VideoGenerator {
                 val translation = if (showTranslation) fetchVerseInfo(surah, ayah, "en.asad").first else null
 
                 val audioFileName = "${reciterId}_${surah}_${ayah}.mp3"
-                val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyahNumber.mp3"
+                val quranComAudioUrl = surahAudioData.audioUrls[ayah]
+                val url = if (!quranComAudioUrl.isNullOrBlank()) {
+                    quranComAudioUrl
+                } else {
+                    "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyahNumber.mp3"
+                }
                 val destFile = File(context.cacheDir, audioFileName)
                 
                 downloadAudio(url, destFile)
@@ -129,7 +154,7 @@ class VideoGenerator {
                     durationUs = maxTs
                 }
                 ext.release()
-                verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs, timeline))
+                verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs, timeline, surahAudioData.segments[ayah] ?: emptyList()))
             }
             
             // 3. Fetch Cinematic Background Portrait Video clip if Pexels or Pixabay API key is provided
@@ -504,8 +529,8 @@ class VideoGenerator {
                     }
                     
                     val frameIndex = videoPtsUs / frameDurationUs
-                    val chunkedText = getActiveTextChunk(verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline)
-                    val chunkedTranslation = getActiveTranslationChunk(verse.translation, verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline)
+                    val chunkedText = getActiveTextChunk(verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline, verse.wordSegments)
+                    val chunkedTranslation = getActiveTranslationChunk(verse.translation, verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline, verse.wordSegments)
                     
                     val bitmap = createVerseBitmap(
                         text = chunkedText,
@@ -949,27 +974,75 @@ class VideoGenerator {
         currentFrame: Int, 
         totalFrames: Int,
         durationUs: Long,
-        timeline: List<Pair<Long, Float>>
+        timeline: List<Pair<Long, Float>>,
+        wordSegments: List<WordSegment>
     ): String {
         val words = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
-        if (words.size <= 5) return text // Short verse, show complete text
+        if (words.isEmpty()) return text
         
-        // Group words into chunks of 4-5 words
-        val chunkSize = if (words.size <= 8) 4 else 5
-        val chunks = mutableListOf<String>()
-        var i = 0
-        while (i < words.size) {
-            val end = Math.min(i + chunkSize, words.size)
-            chunks.add(words.subList(i, end).joinToString(" "))
-            i += chunkSize
+        // 1. Fallback to heuristic energy timeline if no word timing segments are available
+        if (wordSegments.isEmpty()) {
+            if (words.size <= 5) return text
+            val chunkSize = if (words.size <= 8) 4 else 5
+            val chunks = mutableListOf<String>()
+            var i = 0
+            while (i < words.size) {
+                val end = Math.min(i + chunkSize, words.size)
+                chunks.add(words.subList(i, end).joinToString(" "))
+                i += chunkSize
+            }
+            if (chunks.isEmpty()) return text
+            val ratio = getCumulativeEnergyRatio(currentFrame, totalFrames, durationUs, timeline)
+            val chunkIdx = (ratio * chunks.size).toInt().coerceIn(0, chunks.size - 1)
+            return chunks[chunkIdx]
         }
         
-        if (chunks.isEmpty()) return text
+        // 2. We have absolute word-by-word segments from Quran.com API v4!
+        val currentTimeMs = ((currentFrame.toFloat() / totalFrames.toFloat()) * durationUs) / 1000
         
-        // Use custom cumulative voice power to index words perfectly in sync with the speaker
-        val ratio = getCumulativeEnergyRatio(currentFrame, totalFrames, durationUs, timeline)
-        val chunkIdx = (ratio * chunks.size).toInt().coerceIn(0, chunks.size - 1)
-        return chunks[chunkIdx]
+        // Let's group words into dynamic chunks of max 5 words to keep subtitles clean & legible
+        val maxWordsInChunk = 5
+        val chunks = mutableListOf<List<Int>>() 
+        var currentChunk = mutableListOf<Int>()
+        for (idx in words.indices) {
+            currentChunk.add(idx)
+            if (currentChunk.size >= maxWordsInChunk) {
+                chunks.add(currentChunk)
+                currentChunk = mutableListOf()
+            }
+        }
+        if (currentChunk.isNotEmpty()) {
+            chunks.add(currentChunk)
+        }
+        
+        fun getWordStartTime(wordIdx: Int): Long {
+            val seg = wordSegments.find { it.wordIndex == wordIdx + 1 }
+            return seg?.startTimeMs ?: 0L
+        }
+        
+        var activeChunkIdx = 0
+        for (cIdx in chunks.indices) {
+            val firstWordIdxInChunk = chunks[cIdx].first()
+            val chunkStartMs = getWordStartTime(firstWordIdxInChunk)
+            if (currentTimeMs >= chunkStartMs) {
+                activeChunkIdx = cIdx
+            }
+        }
+        
+        val activeChunkWordIndices = chunks[activeChunkIdx]
+        val visibleWords = mutableListOf<String>()
+        for (wordIdx in activeChunkWordIndices) {
+            val startMs = getWordStartTime(wordIdx)
+            if (currentTimeMs >= startMs) {
+                visibleWords.add(words[wordIdx])
+            }
+        }
+        
+        if (visibleWords.isEmpty() && activeChunkWordIndices.isNotEmpty()) {
+            visibleWords.add(words[activeChunkWordIndices.first()])
+        }
+        
+        return visibleWords.joinToString(" ")
     }
 
     private fun getActiveTranslationChunk(
@@ -978,27 +1051,49 @@ class VideoGenerator {
         currentFrame: Int, 
         totalFrames: Int,
         durationUs: Long,
-        timeline: List<Pair<Long, Float>>
+        timeline: List<Pair<Long, Float>>,
+        wordSegments: List<WordSegment>
     ): String? {
         if (translation == null) return null
         val wordsOrig = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
-        if (wordsOrig.size <= 5) return translation
+        if (wordsOrig.isEmpty()) return translation
         
         val transWords = translation.split("\\s+".toRegex()).filter { it.isNotBlank() }
         if (transWords.size <= 6) return translation
         
-        // Calculate chunks of original text
-        val chunkSize = if (wordsOrig.size <= 8) 4 else 5
-        var quranChunksCount = 0
-        var i = 0
-        while (i < wordsOrig.size) {
-            quranChunksCount++
-            i += chunkSize
+        // 1. Fallback to energy timeline if no word timing segments are available
+        if (wordSegments.isEmpty()) {
+            val chunkSize = if (wordsOrig.size <= 8) 4 else 5
+            var quranChunksCount = 0
+            var i = 0
+            while (i < wordsOrig.size) {
+                quranChunksCount++
+                i += chunkSize
+            }
+            if (quranChunksCount <= 1) return translation
+            val wordsPerTransChunk = Math.ceil(transWords.size.toDouble() / quranChunksCount.toDouble()).toInt().coerceAtLeast(1)
+            val transChunks = mutableListOf<String>()
+            var tIdx = 0
+            while (tIdx < transWords.size) {
+                val end = Math.min(tIdx + wordsPerTransChunk, transWords.size)
+                transChunks.add(transWords.subList(tIdx, end).joinToString(" "))
+                tIdx += wordsPerTransChunk
+            }
+            val ratio = getCumulativeEnergyRatio(currentFrame, totalFrames, durationUs, timeline)
+            val chunkIdx = (ratio * quranChunksCount).toInt().coerceIn(0, quranChunksCount - 1)
+            if (chunkIdx < transChunks.size) {
+                return transChunks[chunkIdx]
+            }
+            return transChunks.lastOrNull() ?: translation
         }
-        if (quranChunksCount <= 1) return translation
         
-        // Proportional slicing of translation words into the exact same amount of pages
-        val wordsPerTransChunk = Math.ceil(transWords.size.toDouble() / quranChunksCount.toDouble()).toInt().coerceAtLeast(1)
+        // 2. Use Quran.com absolute segments for perfect cohesion!
+        val currentTimeMs = ((currentFrame.toFloat() / totalFrames.toFloat()) * durationUs) / 1000
+        
+        val maxWordsInChunk = 5
+        val chunksCount = Math.ceil(wordsOrig.size.toDouble() / maxWordsInChunk.toDouble()).toInt().coerceAtLeast(1)
+        
+        val wordsPerTransChunk = Math.ceil(transWords.size.toDouble() / chunksCount.toDouble()).toInt().coerceAtLeast(1)
         val transChunks = mutableListOf<String>()
         var tIdx = 0
         while (tIdx < transWords.size) {
@@ -1007,11 +1102,19 @@ class VideoGenerator {
             tIdx += wordsPerTransChunk
         }
         
-        val ratio = getCumulativeEnergyRatio(currentFrame, totalFrames, durationUs, timeline)
-        val chunkIdx = (ratio * quranChunksCount).toInt().coerceIn(0, quranChunksCount - 1)
+        var activeChunkIdx = 0
+        for (cIdx in 0 until chunksCount) {
+            val firstWordIdxInChunk = cIdx * maxWordsInChunk
+            val firstWordIdxInChunkCoerced = firstWordIdxInChunk.coerceAtMost(wordsOrig.size - 1)
+            val seg = wordSegments.find { it.wordIndex == firstWordIdxInChunkCoerced + 1 }
+            val chunkStartMs = seg?.startTimeMs ?: 0L
+            if (currentTimeMs >= chunkStartMs) {
+                activeChunkIdx = cIdx
+            }
+        }
         
-        if (chunkIdx < transChunks.size) {
-            return transChunks[chunkIdx]
+        if (activeChunkIdx < transChunks.size) {
+            return transChunks[activeChunkIdx]
         }
         return transChunks.lastOrNull() ?: translation
     }
@@ -1312,6 +1415,81 @@ class VideoGenerator {
                 yBuffer.put(yBytes)
             }
         }
+    }
+
+    private fun mapReciterIdToQuranComId(reciterId: String): Int {
+        val clean = reciterId.lowercase()
+        return when {
+            clean.contains("alafasy") -> 7
+            clean.contains("sudais") -> 3
+            clean.contains("shuraim") -> 10
+            clean.contains("muaiqly") -> 12
+            clean.contains("husary") -> 5
+            clean.contains("minshawi") -> 6
+            clean.contains("abdulbasit") -> 1
+            clean.contains("ghamadi") -> 9
+            clean.contains("ajamy") -> 4
+            else -> 7 // Fallback to Alafasy (id 7), as it has 100% complete segment data
+        }
+    }
+
+    private fun fetchSegmentsForSurah(recitationId: Int, surah: Int): SurahAudioData {
+        val segmentsMap = mutableMapOf<Int, List<WordSegment>>()
+        val audioUrlsMap = mutableMapOf<Int, String>()
+        try {
+            val url = "https://api.quran.com/api/v4/audio/recitations/$recitationId/audio_files?chapter_number=$surah"
+            val request = Request.Builder().url(url).build()
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                val body = response.body?.string() ?: ""
+                val json = JSONObject(body)
+                if (json.has("audio_files")) {
+                    val audioFiles = json.getJSONArray("audio_files")
+                    for (f in 0 until audioFiles.length()) {
+                        val fileObj = audioFiles.getJSONObject(f)
+                        val verseKey = if (fileObj.has("verse_key")) fileObj.getString("verse_key") else ""
+                        if (verseKey.isNotBlank()) {
+                            val parts = verseKey.split(":")
+                            if (parts.size == 2) {
+                                val ayahNum = parts[1].toIntOrNull() ?: continue
+                                
+                                // Parse audio url
+                                var audioUrl = if (fileObj.has("audio_url")) fileObj.getString("audio_url") else ""
+                                if (audioUrl.isNotBlank()) {
+                                    if (audioUrl.startsWith("//")) {
+                                        audioUrl = "https:$audioUrl"
+                                    } else if (!audioUrl.startsWith("http://") && !audioUrl.startsWith("https://")) {
+                                        audioUrl = "https://download.quranicaudio.com/$audioUrl"
+                                    }
+                                    audioUrlsMap[ayahNum] = audioUrl
+                                }
+                                
+                                // Parse segments
+                                val segmentsList = mutableListOf<WordSegment>()
+                                if (fileObj.has("segments")) {
+                                    val segmentsArr = fileObj.getJSONArray("segments")
+                                    for (s in 0 until segmentsArr.length()) {
+                                        val seg = segmentsArr.getJSONArray(s)
+                                        if (seg.length() >= 3) {
+                                            val wordIdx = seg.getInt(0)
+                                            val startMs = seg.getLong(1)
+                                            val endMs = seg.getLong(2)
+                                            segmentsList.add(WordSegment(wordIdx, startMs, endMs))
+                                        }
+                                    }
+                                }
+                                if (segmentsList.isNotEmpty()) {
+                                    segmentsMap[ayahNum] = segmentsList.sortedBy { it.startTimeMs }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return SurahAudioData(segmentsMap, audioUrlsMap)
     }
 }
 
