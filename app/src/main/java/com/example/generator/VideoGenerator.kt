@@ -1466,12 +1466,12 @@ class VideoGenerator {
             clean.contains("alafasy") -> 7
             clean.contains("sudais") -> 3
             clean.contains("shuraim") -> 10
-            clean.contains("muaiqly") -> 12
-            clean.contains("husary") -> 5
-            clean.contains("minshawi") -> 6
-            clean.contains("abdulbasit") -> 1
-            clean.contains("ghamadi") -> 9
-            clean.contains("ajamy") -> 4
+            clean.contains("husary") -> 6
+            clean.contains("minshawi") -> 9
+            clean.contains("abdulbasit") -> 2
+            clean.contains("shatri") -> 4
+            clean.contains("rifai") -> 5
+            clean.contains("tablawi") -> 11
             else -> 7 // Fallback to Alafasy (id 7), as it has 100% complete segment data
         }
     }
@@ -1480,8 +1480,11 @@ class VideoGenerator {
         val segmentsMap = mutableMapOf<Int, List<WordSegment>>()
         val audioUrlsMap = mutableMapOf<Int, String>()
         try {
-            val url = "https://api.quran.com/api/v4/audio/recitations/$recitationId/audio_files?chapter_number=$surah"
-            val request = Request.Builder().url(url).build()
+            val url = "https://api.quran.com/api/v4/quran/recitations/$recitationId?fields=segments&chapter_number=$surah"
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Android VideoGenerator")
+                .build()
             val response = client.newCall(request).execute()
             if (response.isSuccessful) {
                 val body = response.body?.string() ?: ""
@@ -1496,8 +1499,12 @@ class VideoGenerator {
                             if (parts.size == 2) {
                                 val ayahNum = parts[1].toIntOrNull() ?: continue
                                 
-                                // Parse audio url
-                                var audioUrl = if (fileObj.has("audio_url")) fileObj.getString("audio_url") else ""
+                                // Parse audio url (handle both url and audio_url formats gracefully)
+                                var audioUrl = when {
+                                    fileObj.has("url") -> fileObj.getString("url")
+                                    fileObj.has("audio_url") -> fileObj.getString("audio_url")
+                                    else -> ""
+                                }
                                 if (audioUrl.isNotBlank()) {
                                     if (audioUrl.startsWith("//")) {
                                         audioUrl = "https:$audioUrl"
@@ -1507,16 +1514,16 @@ class VideoGenerator {
                                     audioUrlsMap[ayahNum] = audioUrl
                                 }
                                 
-                                // Parse segments
+                                // Parse segments (support both v3 and v4 representations)
                                 val segmentsList = mutableListOf<WordSegment>()
                                 if (fileObj.has("segments")) {
                                     val segmentsArr = fileObj.getJSONArray("segments")
                                     for (s in 0 until segmentsArr.length()) {
                                         val seg = segmentsArr.getJSONArray(s)
                                         if (seg.length() >= 3) {
-                                            val wordIdx = seg.getInt(0)
-                                            val startMs = seg.getLong(1)
-                                            val endMs = seg.getLong(2)
+                                            val wordIdx = if (seg.length() >= 4) seg.getInt(1) else seg.getInt(0)
+                                            val startMs = if (seg.length() >= 4) seg.getLong(2) else seg.getLong(1)
+                                            val endMs = if (seg.length() >= 4) seg.getLong(3) else seg.getLong(2)
                                             segmentsList.add(WordSegment(wordIdx, startMs, endMs))
                                         }
                                     }
