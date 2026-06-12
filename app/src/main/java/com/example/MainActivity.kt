@@ -1524,126 +1524,124 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                         )
                     }
 
-                    if (showTranslation) {
-                        // Translation Font Family Dropdown
-                        Text(if (isArabic) "نوع خط الترجمة" else "Subtitles Font Family", color = TextMutedColor, fontSize = 13.sp)
-                        ExposedDropdownMenuBox(
-                            expanded = translationFontExpanded,
-                            onExpandedChange = { translationFontExpanded = it }
-                        ) {
-                            OutlinedTextField(
-                                value = when (translationFontFamily) {
-                                    "Amiri" -> if (isArabic) "Amiri (أميري / مائل)" else "Amiri (Elegant Serif)"
-                                    "Cairo" -> if (isArabic) "Cairo (كايرو / حديث)" else "Cairo (Clean Sans)"
-                                    "Monospace" -> if (isArabic) "Monospace (منسق)" else "Monospace Modern"
-                                    else -> if (isArabic) "الخط الافتراضي (Default)" else "Standard Subtitle"
-                                },
-                                onValueChange = {},
-                                readOnly = true,
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = translationFontExpanded) },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = TextSoftColor,
-                                    unfocusedTextColor = TextSoftColor,
-                                    focusedBorderColor = LuxuryGold,
-                                    unfocusedBorderColor = BorderColor,
-                                    focusedContainerColor = ScreenBg,
-                                    unfocusedContainerColor = ScreenBg,
-                                    disabledContainerColor = ScreenBg,
-                                    errorContainerColor = ScreenBg
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier
-                                    .menuAnchor()
-                                    .fillMaxWidth()
-                            )
-                            ExposedDropdownMenu(
-                                expanded = translationFontExpanded,
-                                onDismissRequest = { translationFontExpanded = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(if (isArabic) "الخط الافتراضي (Default)" else "Standard Subtitle", color = TextSoftColor) },
-                                    onClick = {
-                                        scope.launch { settingsManager.setTranslationFontFamily("Default") }
-                                        translationFontExpanded = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (isArabic) "Amiri (أميري / مائل)" else "Amiri (Elegant Serif)", color = TextSoftColor) },
-                                    onClick = {
-                                        scope.launch { settingsManager.setTranslationFontFamily("Amiri") }
-                                        translationFontExpanded = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (isArabic) "Cairo (كايرو / حديث)" else "Cairo (Clean Sans)", color = TextSoftColor) },
-                                    onClick = {
-                                        scope.launch { settingsManager.setTranslationFontFamily("Cairo") }
-                                        translationFontExpanded = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (isArabic) "Monospace (ثابت العرض)" else "Monospace Modern", color = TextSoftColor) },
-                                    onClick = {
-                                        scope.launch { settingsManager.setTranslationFontFamily("Monospace") }
-                                        translationFontExpanded = false
-                                    }
-                                )
-                            }
-                        }
-
-                        // Translation Text Size
-                        Text(if (isArabic) "حجم خط الترجمة" else "Subtitles Font Size", color = TextMutedColor, fontSize = 13.sp)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                    // Translation Font Family Dropdown
+                    Text(if (isArabic) "نوع خط الترجمة" else "Subtitles Font Family", color = TextMutedColor, fontSize = 13.sp)
+                    ExposedDropdownMenuBox(
+                        expanded = translationFontExpanded,
+                        onExpandedChange = { translationFontExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = when (translationFontFamily) {
+                                "Amiri" -> if (isArabic) "Amiri (أميري / مائل)" else "Amiri (Elegant Serif)"
+                                "Cairo" -> if (isArabic) "Cairo (كايرو / حديث)" else "Cairo (Clean Sans)"
+                                "Monospace" -> if (isArabic) "Monospace (منسق)" else "Monospace Modern"
+                                else -> if (isArabic) "الخط الافتراضي (Default)" else "Standard Subtitle"
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = translationFontExpanded) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = TextSoftColor,
+                                unfocusedTextColor = TextSoftColor,
+                                focusedBorderColor = LuxuryGold,
+                                unfocusedBorderColor = BorderColor,
+                                focusedContainerColor = ScreenBg,
+                                unfocusedContainerColor = ScreenBg,
+                                disabledContainerColor = ScreenBg,
+                                errorContainerColor = ScreenBg
+                            ),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
+                                .menuAnchor()
                                 .fillMaxWidth()
-                                .background(ScreenBg, RoundedCornerShape(12.dp))
-                                .padding(12.dp)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = translationFontExpanded,
+                            onDismissRequest = { translationFontExpanded = false }
                         ) {
-                            TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize - 2).coerceAtLeast(15)) } }) {
-                                Text("A-", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            }
-                            Text("${translationFontSize}px", color = TextSoftColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize + 2).coerceAtMost(60)) } }) {
-                                Text("A+", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            }
-                        }
-
-                        // Translation Color presets
-                        Text(if (isArabic) "لون الترجمة" else "Subtitles Text Color", color = TextMutedColor, fontSize = 13.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            val transColors = listOf(
-                                "#E6D5C3" to Color(0xFFE6D5C3), // Beige
-                                "#FFE082" to Color(0xFFFFE082), // Light Amber
-                                "#FFFFFF" to Color(0xFFFFFFFF)  // Pure White
+                            DropdownMenuItem(
+                                text = { Text(if (isArabic) "الخط الافتراضي (Default)" else "Standard Subtitle", color = TextSoftColor) },
+                                onClick = {
+                                    scope.launch { settingsManager.setTranslationFontFamily("Default") }
+                                    translationFontExpanded = false
+                                }
                             )
-                            transColors.forEach { (hex, clr) ->
-                                val isSelected = translationColorStr.equals(hex, ignoreCase = true)
-                                Box(
-                                    modifier = Modifier
-                                        .size(42.dp)
-                                        .border(
-                                            width = if (isSelected) 3.dp else 1.dp,
-                                            color = if (isSelected) LuxuryGold else BorderColor,
-                                            shape = CircleShape
-                                        )
-                                        .padding(4.dp)
-                                        .background(clr, CircleShape)
-                                        .clickable {
-                                            scope.launch { settingsManager.setTranslationColor(hex) }
-                                        }
-                                ) {
-                                    if (isSelected) {
-                                        Icon(
-                                            Icons.Filled.Check,
-                                            contentDescription = null,
-                                            tint = if (clr == Color.White) Color.Black else Color.White,
-                                            modifier = Modifier
-                                                .size(16.dp)
-                                                .align(Alignment.Center)
-                                        )
+                            DropdownMenuItem(
+                                text = { Text(if (isArabic) "Amiri (أميري / مائل)" else "Amiri (Elegant Serif)", color = TextSoftColor) },
+                                onClick = {
+                                    scope.launch { settingsManager.setTranslationFontFamily("Amiri") }
+                                    translationFontExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (isArabic) "Cairo (كايرو / حديث)" else "Cairo (Clean Sans)", color = TextSoftColor) },
+                                onClick = {
+                                    scope.launch { settingsManager.setTranslationFontFamily("Cairo") }
+                                    translationFontExpanded = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(if (isArabic) "Monospace (ثابت العرض)" else "Monospace Modern", color = TextSoftColor) },
+                                onClick = {
+                                    scope.launch { settingsManager.setTranslationFontFamily("Monospace") }
+                                    translationFontExpanded = false
+                                }
+                            )
+                        }
+                    }
+
+                    // Translation Text Size
+                    Text(if (isArabic) "حجم خط الترجمة" else "Subtitles Font Size", color = TextMutedColor, fontSize = 13.sp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(ScreenBg, RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize - 2).coerceAtLeast(15)) } }) {
+                            Text("A-", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                        Text("${translationFontSize}px", color = TextSoftColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize + 2).coerceAtMost(60)) } }) {
+                            Text("A+", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        }
+                    }
+
+                    // Translation Color presets
+                    Text(if (isArabic) "لون الترجمة" else "Subtitles Text Color", color = TextMutedColor, fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        val transColors = listOf(
+                            "#E6D5C3" to Color(0xFFE6D5C3), // Beige
+                            "#FFE082" to Color(0xFFFFE082), // Light Amber
+                            "#FFFFFF" to Color(0xFFFFFFFF)  // Pure White
+                        )
+                        transColors.forEach { (hex, clr) ->
+                            val isSelected = translationColorStr.equals(hex, ignoreCase = true)
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .border(
+                                        width = if (isSelected) 3.dp else 1.dp,
+                                        color = if (isSelected) LuxuryGold else BorderColor,
+                                        shape = CircleShape
+                                    )
+                                    .padding(4.dp)
+                                    .background(clr, CircleShape)
+                                    .clickable {
+                                        scope.launch { settingsManager.setTranslationColor(hex) }
                                     }
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        Icons.Filled.Check,
+                                        contentDescription = null,
+                                        tint = if (clr == Color.White) Color.Black else Color.White,
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .align(Alignment.Center)
+                                    )
                                 }
                             }
                         }
