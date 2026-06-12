@@ -1038,20 +1038,8 @@ class VideoGenerator {
             chunks.add(currentChunk)
         }
         
-        // Offset shift to guarantee word segments start at 0
-        val adjustedWordSegments = if (wordSegments.isNotEmpty()) {
-            val sortedRaw = wordSegments.sortedBy { it.startTimeMs }
-            val firstStart = sortedRaw.first().startTimeMs
-            sortedRaw.map { 
-                WordSegment(
-                    wordIndex = it.wordIndex,
-                    startTimeMs = (it.startTimeMs - firstStart).coerceAtLeast(0L),
-                    endTimeMs = (it.endTimeMs - firstStart).coerceAtLeast(0L)
-                )
-            }
-        } else {
-            emptyList()
-        }
+        // Use original word segments sorted chronologically without subtracting firstStart offset
+        val adjustedWordSegments = wordSegments.sortedBy { it.startTimeMs }
         
         fun getWordStartTime(wordIdx: Int): Long {
             val seg = adjustedWordSegments.find { it.wordIndex == wordIdx + 1 }
@@ -1132,20 +1120,8 @@ class VideoGenerator {
             tIdx += wordsPerTransChunk
         }
         
-        // 2. Adjust segments offset (if any)
-        val adjustedWordSegments = if (wordSegments.isNotEmpty()) {
-            val sortedRaw = wordSegments.sortedBy { it.startTimeMs }
-            val firstStart = sortedRaw.first().startTimeMs
-            sortedRaw.map { 
-                WordSegment(
-                    wordIndex = it.wordIndex,
-                    startTimeMs = (it.startTimeMs - firstStart).coerceAtLeast(0L),
-                    endTimeMs = (it.endTimeMs - firstStart).coerceAtLeast(0L)
-                )
-            }
-        } else {
-            emptyList()
-        }
+        // Use original word segments sorted chronologically without subtracting firstStart offset
+        val adjustedWordSegments = wordSegments.sortedBy { it.startTimeMs }
         
         fun getWordStartTime(wordIdx: Int): Long {
             val seg = adjustedWordSegments.find { it.wordIndex == wordIdx + 1 }
