@@ -33,6 +33,7 @@ class SettingsManager(private val context: Context) {
         
         val TRANSLATION_FONT_SIZE = intPreferencesKey("translation_font_size")
         val TRANSLATION_COLOR = stringPreferencesKey("translation_color")
+        val TRANSLATION_FONT_FAMILY = stringPreferencesKey("translation_font_family")
 
         // Gemini & Social accounts keys
         val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
@@ -102,6 +103,7 @@ class SettingsManager(private val context: Context) {
     
     val translationFontSize: Flow<Int> = context.dataStore.data.map { it[TRANSLATION_FONT_SIZE] ?: 25 }
     val translationColor: Flow<String> = context.dataStore.data.map { it[TRANSLATION_COLOR] ?: "#E0E0E0" }
+    val translationFontFamily: Flow<String> = context.dataStore.data.map { it[TRANSLATION_FONT_FAMILY] ?: "Default" }
 
     // Gemini & Social accounts flows
     val geminiApiKey: Flow<String> = context.dataStore.data.map { it[GEMINI_API_KEY] ?: "" }
@@ -215,6 +217,10 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setTranslationColor(value: String) {
         context.dataStore.edit { it[TRANSLATION_COLOR] = value }
+    }
+
+    suspend fun setTranslationFontFamily(value: String) {
+        context.dataStore.edit { it[TRANSLATION_FONT_FAMILY] = value }
     }
 
     // Gemini & Social accounts setters

@@ -105,6 +105,7 @@ class VideoGenerator {
             
             val translationFontSize = settingsManager.translationFontSize.first()
             val translationColorStr = settingsManager.translationColor.first()
+            val translationFontFamily = settingsManager.translationFontFamily.first()
             val pixabayApiKey = settingsManager.pixabayApiKey.first()
             
             // 2. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
@@ -559,6 +560,7 @@ class VideoGenerator {
                         textAlign = textAlign,
                         translationFontSize = translationFontSize,
                         translationColorStr = translationColorStr,
+                        translationFontFamily = translationFontFamily,
                         frameIndex = frameIndex
                     )
                     
@@ -1179,6 +1181,7 @@ class VideoGenerator {
         textAlign: String,
         translationFontSize: Int,
         translationColorStr: String,
+        translationFontFamily: String,
         frameIndex: Long
     ): Bitmap {
         val bitmap = Bitmap.createBitmap(720, 1280, Bitmap.Config.ARGB_8888)
@@ -1301,7 +1304,12 @@ class VideoGenerator {
         val transPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = transColor
             this.textAlign = Paint.Align.LEFT
-            typeface = Typeface.create("serif", Typeface.ITALIC)
+            typeface = when (translationFontFamily) {
+                "Amiri" -> Typeface.create("serif", Typeface.ITALIC)
+                "Cairo" -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                "Monospace" -> Typeface.create("monospace", Typeface.NORMAL)
+                else -> Typeface.create("sans-serif", Typeface.NORMAL)
+            }
             this.textSize = translationFontSize.toFloat() * 1.8f
             setShadowLayer(8f, 0f, 4f, Color.argb(200, 0, 0, 0))
         }

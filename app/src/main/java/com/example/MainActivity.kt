@@ -1083,9 +1083,11 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
     val showTranslation by settingsManager.showTranslation.collectAsState(initial = true)
     val translationFontSize by settingsManager.translationFontSize.collectAsState(initial = 25)
     val translationColorStr by settingsManager.translationColor.collectAsState(initial = "#FFFFFF")
+    val translationFontFamily by settingsManager.translationFontFamily.collectAsState(initial = "Default")
 
     // Expansions
     var fontTypeExpanded by remember { mutableStateOf(false) }
+    var translationFontExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -1523,6 +1525,72 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                     }
 
                     if (showTranslation) {
+                        // Translation Font Family Dropdown
+                        Text(if (isArabic) "نوع خط الترجمة" else "Subtitles Font Family", color = TextMutedColor, fontSize = 13.sp)
+                        ExposedDropdownMenuBox(
+                            expanded = translationFontExpanded,
+                            onExpandedChange = { translationFontExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = when (translationFontFamily) {
+                                    "Amiri" -> if (isArabic) "Amiri (أميري / مائل)" else "Amiri (Elegant Serif)"
+                                    "Cairo" -> if (isArabic) "Cairo (كايرو / حديث)" else "Cairo (Clean Sans)"
+                                    "Monospace" -> if (isArabic) "Monospace (منسق)" else "Monospace Modern"
+                                    else -> if (isArabic) "الخط الافتراضي (Default)" else "Standard Subtitle"
+                                },
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = translationFontExpanded) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = TextSoftColor,
+                                    unfocusedTextColor = TextSoftColor,
+                                    focusedBorderColor = LuxuryGold,
+                                    unfocusedBorderColor = BorderColor,
+                                    focusedContainerColor = ScreenBg,
+                                    unfocusedContainerColor = ScreenBg,
+                                    disabledContainerColor = ScreenBg,
+                                    errorContainerColor = ScreenBg
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth()
+                            )
+                            ExposedDropdownMenu(
+                                expanded = translationFontExpanded,
+                                onDismissRequest = { translationFontExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(if (isArabic) "الخط الافتراضي (Default)" else "Standard Subtitle", color = TextSoftColor) },
+                                    onClick = {
+                                        scope.launch { settingsManager.setTranslationFontFamily("Default") }
+                                        translationFontExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (isArabic) "Amiri (أميري / مائل)" else "Amiri (Elegant Serif)", color = TextSoftColor) },
+                                    onClick = {
+                                        scope.launch { settingsManager.setTranslationFontFamily("Amiri") }
+                                        translationFontExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (isArabic) "Cairo (كايرو / حديث)" else "Cairo (Clean Sans)", color = TextSoftColor) },
+                                    onClick = {
+                                        scope.launch { settingsManager.setTranslationFontFamily("Cairo") }
+                                        translationFontExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (isArabic) "Monospace (ثابت العرض)" else "Monospace Modern", color = TextSoftColor) },
+                                    onClick = {
+                                        scope.launch { settingsManager.setTranslationFontFamily("Monospace") }
+                                        translationFontExpanded = false
+                                    }
+                                )
+                            }
+                        }
+
                         // Translation Text Size
                         Text(if (isArabic) "حجم خط الترجمة" else "Subtitles Font Size", color = TextMutedColor, fontSize = 13.sp)
                         Row(
@@ -1606,6 +1674,7 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                 showTranslation = showTranslation,
                 translationFontSize = translationFontSize,
                 translationColorStr = translationColorStr,
+                translationFontFamily = translationFontFamily,
                 isArabic = isArabic
             )
         }
@@ -1627,6 +1696,7 @@ fun LivePreviewContainer(
     showTranslation: Boolean,
     translationFontSize: Int,
     translationColorStr: String,
+    translationFontFamily: String,
     isArabic: Boolean
 ) {
     Box(
@@ -1713,6 +1783,12 @@ fun LivePreviewContainer(
                         )
                         Text(
                             text = "Indeed, We have granted you, [O Muhammad], al-Kawthar.",
+                            fontFamily = when (translationFontFamily) {
+                                "Amiri" -> FontFamily.Serif
+                                "Cairo" -> FontFamily.SansSerif
+                                "Monospace" -> FontFamily.Monospace
+                                else -> FontFamily.Default
+                            },
                             fontSize = (translationFontSize * 0.65f).sp,
                             fontWeight = FontWeight.Medium,
                             color = transColor,
