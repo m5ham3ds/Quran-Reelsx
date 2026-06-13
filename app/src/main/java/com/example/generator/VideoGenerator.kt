@@ -127,12 +127,7 @@ class VideoGenerator {
                 val translation = if (showTranslation) fetchVerseInfo(surah, ayah, "en.asad").first else null
 
                 val audioFileName = "${reciterId}_${surah}_${ayah}.mp3"
-                val quranComAudioUrl = surahAudioData.audioUrls[ayah]
-                val url = if (!quranComAudioUrl.isNullOrBlank()) {
-                    quranComAudioUrl
-                } else {
-                    "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyahNumber.mp3"
-                }
+                val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyahNumber.mp3"
                 val destFile = File(context.cacheDir, audioFileName)
                 
                 downloadAudio(url, destFile)
@@ -721,7 +716,10 @@ class VideoGenerator {
 
     private fun downloadAudio(url: String, destFile: File) {
         if (destFile.exists() && destFile.length() > 0) return
-        val request = Request.Builder().url(url).build()
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Android VideoGenerator")
+            .build()
         val response = client.newCall(request).execute()
         if (!response.isSuccessful) throw Exception("فشل تحميل الملفات الصوتية المحددة")
         response.body?.byteStream()?.use { input ->
