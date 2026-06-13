@@ -9,6 +9,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.example.MainActivity
 import com.example.generator.VideoGenerator
@@ -27,6 +28,7 @@ class VideoGenerationService : Service() {
     private val scope = CoroutineScope(Dispatchers.IO + job)
 
     private lateinit var notificationManager: NotificationManager
+    private var wakeLock: PowerManager.WakeLock? = null
     private val channelId = "video_generation_channel"
     private val notificationId = 1001
 
@@ -34,6 +36,9 @@ class VideoGenerationService : Service() {
         super.onCreate()
         notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         createNotificationChannel()
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "QuranReel:VideoGenerationLock")
+        wakeLock?.acquire()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -346,6 +351,11 @@ class VideoGenerationService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         job.cancel()
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
     }
 
     companion object {

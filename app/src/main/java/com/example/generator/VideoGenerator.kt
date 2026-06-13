@@ -44,7 +44,8 @@ import kotlin.concurrent.thread
 data class WordSegment(
     val wordIndex: Int,
     val startTimeMs: Long,
-    val endTimeMs: Long
+    val endTimeMs: Long,
+    val word: String = ""
 )
 
 data class SmartChunk(
@@ -479,6 +480,7 @@ class VideoGenerator {
             
             var videoTrackIdx = -1
             var audioTrackIdx = -1
+            var lastWrittenVideoPts = -1L
             val muxerStarted = java.util.concurrent.atomic.AtomicBoolean(false)
             
             val audioFormat = MediaExtractor().apply { setDataSource(verses[0].audioPath) }.apply { selectTrack(0) }.getTrackFormat(0)
@@ -531,6 +533,10 @@ class VideoGenerator {
                                 buf.position(bufferInfo.offset)
                                 buf.limit(bufferInfo.offset + bufferInfo.size)
                                 synchronized(finalMuxer) {
+                                    if (bufferInfo.presentationTimeUs <= lastWrittenVideoPts) {
+                                        bufferInfo.presentationTimeUs = lastWrittenVideoPts + 100L
+                                    }
+                                    lastWrittenVideoPts = bufferInfo.presentationTimeUs
                                     finalMuxer.writeSampleData(videoTrackIdx, buf, bufferInfo)
                                 }
                             }
@@ -1744,12 +1750,14 @@ class VideoGenerator {
                             val wordObj = wordsArray.getJSONObject(wIdx)
                             val startSec = wordObj.optDouble("start", -1.0)
                             val endSec = wordObj.optDouble("end", -1.0)
+                            val wordText = wordObj.optString("word", "").trim()
                             if (startSec >= 0.0 && endSec >= 0.0) {
                                 wordSegments.add(
                                     WordSegment(
                                         wordIndex = wIdx + 1,
                                         startTimeMs = (startSec * 1000).toLong(),
-                                        endTimeMs = (endSec * 1000).toLong()
+                                        endTimeMs = (endSec * 1000).toLong(),
+                                        word = wordText
                                     )
                                 )
                             }
@@ -1923,18 +1931,43 @@ class VideoGenerator {
         
         val adjustedWordSegments = wordSegments.sortedBy { it.startTimeMs }
         
-        fun getWordStartTime(wordIdx: Int): Long {
-            val seg = adjustedWordSegments.find { it.wordIndex == wordIdx + 1 }
-            if (seg != null) return seg.startTimeMs
-            val fraction = wordIdx.toFloat() / totalArabic.toFloat()
-            return (fraction * durationMs).toLong()
+        val cleanSegs = adjustedWordSegments.map { 
+            it.word.replace("[^\\p{L}]".toRegex(), "") 
+        }
+        val cleanArabic = arabicWords.map { 
+            it.replace("[^\\p{L}]".toRegex(), "") 
+        }
+
+        val wordSegMap = mutableMapOf<Int, WordSegment>()
+        var sIdx = 0
+        for (aIdx in cleanArabic.indices) {
+            val aWord = cleanArabic[aIdx]
+            if (aWord.isEmpty()) continue
+            
+            var matched = false
+            for (lookAhead in 0 until 5) {
+                val checkIdx = sIdx + lookAhead
+                if (checkIdx < cleanSegs.size && cleanSegs[checkIdx].isNotEmpty()) {
+                    if (cleanSegs[checkIdx] == aWord || cleanSegs[checkIdx].contains(aWord) || aWord.contains(cleanSegs[checkIdx])) {
+                        wordSegMap[aIdx] = adjustedWordSegments[checkIdx]
+                        sIdx = checkIdx + 1
+                        matched = true
+                        break
+                    }
+                }
+            }
+            if (!matched && sIdx < cleanSegs.size) {
+                 // Greedy advance to remain in sync
+                 wordSegMap[aIdx] = adjustedWordSegments[sIdx]
+                 sIdx++
+            }
         }
         
-        fun getWordEndTime(wordIdx: Int): Long {
-            val seg = adjustedWordSegments.find { it.wordIndex == wordIdx + 1 }
-            if (seg != null) return seg.endTimeMs
-            val fraction = (wordIdx + 1).toFloat() / totalArabic.toFloat()
-            return (fraction * durationMs).toLong()
+        fun getWordTiming(aIdx: Int, fallbackRatio: Float): Pair<Long, Long> {
+            val seg = wordSegMap[aIdx]
+            if (seg != null) return Pair(seg.startTimeMs, seg.endTimeMs)
+            val fallbackTime = (fallbackRatio * durationMs).toLong()
+            return Pair(fallbackTime, fallbackTime)
         }
         
         val result = mutableListOf<SmartChunk>()
@@ -1947,8 +1980,21 @@ class VideoGenerator {
                 null
             }
             
-            val startMs = getWordStartTime(arabicIndices.first())
-            val endMs = getWordEndTime(arabicIndices.last())
+            val startRatio = arabicIndices.first().toFloat() / totalArabic.toFloat()
+            val firstTiming = getWordTiming(arabicIndices.first(), startRatio)
+            val startMs = firstTiming.first
+            var endMs = firstTiming.second
+            
+            for (i in 1 until arabicIndices.size - 1) {
+                val timing = getWordTiming(arabicIndices[i], 0f)
+                if (timing.second > endMs) endMs = timing.second
+            }
+            
+            if (arabicIndices.size > 1) {
+                val endRatio = (arabicIndices.last() + 1).toFloat() / totalArabic.toFloat()
+                val lastTiming = getWordTiming(arabicIndices.last(), endRatio)
+                if (lastTiming.second > endMs) endMs = lastTiming.second
+            }
             
             result.add(SmartChunk(chunkArabicText, if (chunkEnglishText.isNullOrBlank()) null else chunkEnglishText, startMs, endMs))
         }
