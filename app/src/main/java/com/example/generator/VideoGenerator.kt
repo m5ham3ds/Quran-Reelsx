@@ -161,7 +161,7 @@ class VideoGenerator {
                 ext.release()
                 
                 val durationMs = durationUs / 1000
-                val smartChunks = getSmartChunks(text, translation, alignedSegments, durationMs)
+                val smartChunks = getSmartChunks(context, text, translation, alignedSegments, durationMs)
                 verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
             }
             
@@ -1675,7 +1675,88 @@ class VideoGenerator {
         return wordSegments
     }
 
-    private fun getSmartChunks(
+    private suspend fun alignTranslationWithGemini(
+        context: Context,
+        arabicChunks: List<String>,
+        fullTranslation: String
+    ): List<String>? = withContext(Dispatchers.IO) {
+        val settingsManager = SettingsManager(context)
+        var apiKey = settingsManager.geminiApiKey.first()
+        if (apiKey.isBlank()) {
+            apiKey = com.example.BuildConfig.GEMINI_API_KEY
+        }
+        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+            return@withContext null
+        }
+
+        val prompt = SystemPromptTemplate.getAlignmentPrompt(arabicChunks, fullTranslation)
+
+        val jsonRequest = JSONObject().apply {
+            val partsArray = org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("text", prompt)
+                })
+            }
+            val countArray = org.json.JSONArray().apply {
+                put(JSONObject().apply {
+                    put("parts", partsArray)
+                })
+            }
+            put("contents", countArray)
+            put("generationConfig", JSONObject().apply {
+                put("responseMimeType", "application/json")
+                put("temperature", 0.1)
+            })
+        }
+
+        val requestBody = jsonRequest.toString().toRequestBody("application/json".toMediaTypeOrNull())
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .build()
+
+        try {
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                val responseStr = response.body?.string() ?: ""
+                val rootJson = JSONObject(responseStr)
+                val candidates = rootJson.getJSONArray("candidates")
+                if (candidates.length() > 0) {
+                    val candidate = candidates.getJSONObject(0)
+                    val contentObj = candidate.getJSONObject("content")
+                    val parts = contentObj.getJSONArray("parts")
+                    if (parts.length() > 0) {
+                        val rawText = parts.getJSONObject(0).getString("text").trim()
+                        val cleanText = if (rawText.startsWith("```json")) {
+                            rawText.substringAfter("```json").substringBeforeLast("```").trim()
+                        } else if (rawText.startsWith("```")) {
+                            rawText.substringAfter("```").substringBeforeLast("```").trim()
+                        } else {
+                            rawText
+                        }
+                        val jsonOutput = JSONObject(cleanText)
+                        if (jsonOutput.has("aligned_translations")) {
+                            val arr = jsonOutput.getJSONArray("aligned_translations")
+                            val chunksList = mutableListOf<String>()
+                            for (i in 0 until arr.length()) {
+                                chunksList.add(arr.getString(i))
+                            }
+                            if (chunksList.size == arabicChunks.size) {
+                                return@withContext chunksList
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return@withContext null
+    }
+
+    private suspend fun getSmartChunks(
+        context: Context,
         arabicText: String,
         englishText: String?,
         wordSegments: List<WordSegment>,
@@ -1713,25 +1794,40 @@ class VideoGenerator {
         
         val totalArabic = arabicWords.size
         val totalEnglish = englishWords.size
-        val englishChunks = mutableListOf<List<String>>()
-        var englishIndex = 0
         
-        chunks.forEachIndexed { index, arabicIndices ->
-            val proportion = arabicIndices.size.toDouble() / totalArabic.toDouble()
-            val numEnglishWords = if (index == chunks.size - 1) {
-                totalEnglish - englishIndex
-            } else {
-                Math.round(proportion * totalEnglish).toInt().coerceAtLeast(1)
-            }.coerceAtMost(totalEnglish - englishIndex)
-            
-            val chunkEngWords = if (numEnglishWords > 0 && englishIndex < totalEnglish) {
-                val sub = englishWords.subList(englishIndex, englishIndex + numEnglishWords)
-                englishIndex += numEnglishWords
-                sub
-            } else {
-                emptyList()
+        // 1. Construct Arabic chunk texts
+        val arabicChunkTexts = chunks.map { arabicIndices ->
+            arabicIndices.map { arabicWords[it] }.joinToString(" ")
+        }
+        
+        // 2. Try aligning with Gemini if translation and API key exist, and we have multiple chunks
+        var englishChunkTexts: List<String>? = null
+        if (!englishText.isNullOrBlank() && chunks.size > 1) {
+            englishChunkTexts = alignTranslationWithGemini(context, arabicChunkTexts, englishText)
+        }
+        
+        // 3. Fallback to mathematical proportional split if Gemini isn't available/used
+        if (englishChunkTexts == null) {
+            val englishChunks = mutableListOf<List<String>>()
+            var englishIndex = 0
+            chunks.forEachIndexed { index, arabicIndices ->
+                val proportion = arabicIndices.size.toDouble() / totalArabic.toDouble()
+                val numEnglishWords = if (index == chunks.size - 1) {
+                    totalEnglish - englishIndex
+                } else {
+                    Math.round(proportion * totalEnglish).toInt().coerceAtLeast(1)
+                }.coerceAtMost(totalEnglish - englishIndex)
+                
+                val chunkEngWords = if (numEnglishWords > 0 && englishIndex < totalEnglish) {
+                    val sub = englishWords.subList(englishIndex, englishIndex + numEnglishWords)
+                    englishIndex += numEnglishWords
+                    sub
+                } else {
+                    emptyList()
+                }
+                englishChunks.add(chunkEngWords)
             }
-            englishChunks.add(chunkEngWords)
+            englishChunkTexts = englishChunks.map { it.joinToString(" ") }
         }
         
         val adjustedWordSegments = wordSegments.sortedBy { it.startTimeMs }
@@ -1753,9 +1849,9 @@ class VideoGenerator {
         val result = mutableListOf<SmartChunk>()
         for (cIdx in chunks.indices) {
             val arabicIndices = chunks[cIdx]
-            val chunkArabicText = arabicIndices.map { arabicWords[it] }.joinToString(" ")
-            val chunkEnglishText = if (englishChunks.isNotEmpty() && cIdx < englishChunks.size) {
-                englishChunks[cIdx].joinToString(" ")
+            val chunkArabicText = arabicChunkTexts[cIdx]
+            val chunkEnglishText = if (englishChunkTexts != null && cIdx < englishChunkTexts.size) {
+                englishChunkTexts[cIdx]
             } else {
                 null
             }
@@ -1937,6 +2033,36 @@ class SequentialFrameDecoder(private val videoPath: String) {
             extractor?.release()
         } catch (e: Exception) {}
         extractor = null
+    }
+}
+
+object SystemPromptTemplate {
+    fun getAlignmentPrompt(arabicChunks: List<String>, fullTranslation: String): String {
+        return """
+            You are an expert Quran translation alignment assistant.
+            Your task is to take a consecutive sequence of Arabic word groups (chunks) from a Quranic verse, and map each and every Arabic chunk directly to its corresponding English segment from the provided full English translation. Traditional translation standards must be aligned exactly with each semantic phrase.
+
+            Strict structural requirements:
+            1. Maintain perfect sequential chronological order.
+            2. Provide exactly one English segment for each input Arabic chunk.
+            3. Ensure that if you concatenate the aligned English segments chronologically, they reconstruct the exact provided English translation (or represent its semantics sequentially).
+            4. Do not paraphrase or translate from scratch; split the existing input English translation words/phrases to match each of the consecutive Arabic chunks.
+
+            Input Arabic Chunks:
+            ${arabicChunks.mapIndexed { idx, s -> "Chunk #${idx + 1}: $s" }.joinToString("\n")}
+
+            Full English Translation:
+            "$fullTranslation"
+
+            Return a single raw JSON object matching this schema:
+            {
+               "aligned_translations": [
+                  "English segment aligned with Chunk #1",
+                  "English segment aligned with Chunk #2", ...
+               ]
+            }
+            Do not include any explanation, backticks or markdown formatting. Only return valid raw JSON.
+        """.trimIndent()
     }
 }
 
