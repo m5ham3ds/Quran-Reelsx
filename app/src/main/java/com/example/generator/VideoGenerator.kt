@@ -28,6 +28,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.MediaType
+import okhttp3.MultipartBody
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.File
 import java.nio.ByteBuffer
@@ -37,6 +43,13 @@ import kotlin.concurrent.thread
 
 data class WordSegment(
     val wordIndex: Int,
+    val startTimeMs: Long,
+    val endTimeMs: Long
+)
+
+data class SmartChunk(
+    val arabic: String,
+    val english: String?,
     val startTimeMs: Long,
     val endTimeMs: Long
 )
@@ -52,7 +65,8 @@ data class VerseData(
     val audioPath: String,
     val durationUs: Long,
     val energyTimeline: List<Pair<Long, Float>>,
-    val wordSegments: List<WordSegment> = emptyList()
+    val wordSegments: List<WordSegment> = emptyList(),
+    val chunks: List<SmartChunk> = emptyList()
 )
 
 class VideoGenerator {
@@ -109,14 +123,6 @@ class VideoGenerator {
             val pixabayApiKey = settingsManager.pixabayApiKey.first()
             
             // 2. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
-            val quranComId = mapReciterIdToQuranComId(reciterId)
-            onProgress(if (isArabic) "جاري جلب تواقيت الكلمات بدقة احترافية..." else "Fetching high-precision word timings from Quran.com...", 0.04f)
-            val surahAudioData = try {
-                fetchSegmentsForSurah(quranComId, surah)
-            } catch (e: Exception) {
-                SurahAudioData(emptyMap(), emptyMap())
-            }
-
             for (i in 0 until totalAyahs) {
                 val ayah = startAyah + i
                 onProgress(if (isArabic) "جاري تحميل الآية $ayah وحفظ مراجع الصوت..." else "Downloading reference audio for Ayah $ayah...", 0.05f + (i * 0.2f / totalAyahs))
@@ -132,7 +138,10 @@ class VideoGenerator {
                 
                 downloadAudio(url, destFile)
                 
-                onProgress(if (isArabic) "جاري ترميز ملف الصوت بدقة سينمائية..." else "Encoding audio block dynamically...", 0.08f + (i * 0.2f / totalAyahs))
+                onProgress(if (isArabic) "جاري مواءمة الكلمات بالذكاء الاصطناعي (WhisperX)..." else "Aligning word timings with WhisperX AI...", 0.07f + (i * 0.2f / totalAyahs))
+                val alignedSegments = alignWithWhisperX(destFile, text)
+                
+                onProgress(if (isArabic) "جاري ترميز ملف الصوت بدقة سينمائية..." else "Encoding audio block dynamically...", 0.12f + (i * 0.2f / totalAyahs))
                 val aacFileName = "${reciterId}_${surah}_${ayah}_transcoded.m4a"
                 val aacFile = File(context.cacheDir, aacFileName)
                 val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
@@ -150,7 +159,10 @@ class VideoGenerator {
                     durationUs = maxTs
                 }
                 ext.release()
-                verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs, timeline, surahAudioData.segments[ayah] ?: emptyList()))
+                
+                val durationMs = durationUs / 1000
+                val smartChunks = getSmartChunks(text, translation, alignedSegments, durationMs)
+                verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
             }
             
             // 3. Fetch Cinematic Background Portrait Video clip if Pexels or Pixabay API key is provided
@@ -535,8 +547,10 @@ class VideoGenerator {
                     
                     val currentFramePts = verseStartPts + i * frameDurationUs
                     val frameIndex = currentFramePts / frameDurationUs
-                    val chunkedText = getActiveTextChunk(verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline, verse.wordSegments)
-                    val chunkedTranslation = getActiveTranslationChunk(verse.translation, verse.text, i, framesNeeded, verse.durationUs, verse.energyTimeline, verse.wordSegments)
+                    val currentTimeMs = (i * frameDurationUs) / 1000
+                    val activeChunk = getActiveSmartChunk(verse.chunks, currentTimeMs)
+                    val chunkedText = activeChunk?.arabic ?: verse.text
+                    val chunkedTranslation = activeChunk?.english ?: verse.translation
                     
                     val bitmap = createVerseBitmap(
                         text = chunkedText,
@@ -1482,71 +1496,7 @@ class VideoGenerator {
         }
     }
 
-    private fun fetchSegmentsForSurah(recitationId: Int, surah: Int): SurahAudioData {
-        val segmentsMap = mutableMapOf<Int, List<WordSegment>>()
-        val audioUrlsMap = mutableMapOf<Int, String>()
-        try {
-            val url = "https://api.quran.com/api/v4/quran/recitations/$recitationId?fields=segments&chapter_number=$surah"
-            val request = Request.Builder()
-                .url(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Android VideoGenerator")
-                .build()
-            val response = client.newCall(request).execute()
-            if (response.isSuccessful) {
-                val body = response.body?.string() ?: ""
-                val json = JSONObject(body)
-                if (json.has("audio_files")) {
-                    val audioFiles = json.getJSONArray("audio_files")
-                    for (f in 0 until audioFiles.length()) {
-                        val fileObj = audioFiles.getJSONObject(f)
-                        val verseKey = if (fileObj.has("verse_key")) fileObj.getString("verse_key") else ""
-                        if (verseKey.isNotBlank()) {
-                            val parts = verseKey.split(":")
-                            if (parts.size == 2) {
-                                val ayahNum = parts[1].toIntOrNull() ?: continue
-                                
-                                // Parse audio url (handle both url and audio_url formats gracefully)
-                                var audioUrl = when {
-                                    fileObj.has("url") -> fileObj.getString("url")
-                                    fileObj.has("audio_url") -> fileObj.getString("audio_url")
-                                    else -> ""
-                                }
-                                if (audioUrl.isNotBlank()) {
-                                    if (audioUrl.startsWith("//")) {
-                                        audioUrl = "https:$audioUrl"
-                                    } else if (!audioUrl.startsWith("http://") && !audioUrl.startsWith("https://")) {
-                                        audioUrl = "https://download.quranicaudio.com/$audioUrl"
-                                    }
-                                    audioUrlsMap[ayahNum] = audioUrl
-                                }
-                                
-                                // Parse segments (support both v3 and v4 representations)
-                                val segmentsList = mutableListOf<WordSegment>()
-                                if (fileObj.has("segments")) {
-                                    val segmentsArr = fileObj.getJSONArray("segments")
-                                    for (s in 0 until segmentsArr.length()) {
-                                        val seg = segmentsArr.getJSONArray(s)
-                                        if (seg.length() >= 3) {
-                                            val wordIdx = if (seg.length() >= 4) seg.getInt(1) else seg.getInt(0)
-                                            val startMs = if (seg.length() >= 4) seg.getLong(2) else seg.getLong(1)
-                                            val endMs = if (seg.length() >= 4) seg.getLong(3) else seg.getLong(2)
-                                            segmentsList.add(WordSegment(wordIdx, startMs, endMs))
-                                        }
-                                    }
-                                }
-                                if (segmentsList.isNotEmpty()) {
-                                    segmentsMap[ayahNum] = segmentsList.sortedBy { it.startTimeMs }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return SurahAudioData(segmentsMap, audioUrlsMap)
-    }
+
 
     private fun resamplePCM(
         inputBuf: ByteBuffer,
@@ -1612,6 +1562,224 @@ class VideoGenerator {
         
         outBytes.flip()
         return outBytes
+    }
+
+    private fun alignWithWhisperX(audioFile: File, text: String): List<WordSegment> {
+        val wordSegments = mutableListOf<WordSegment>()
+        try {
+            // 1. Upload audio file to /gradio_api/upload
+            val mediaType = "audio/mpeg".toMediaTypeOrNull()
+            val requestBody = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart(
+                    "files",
+                    audioFile.name,
+                    audioFile.asRequestBody(mediaType)
+                )
+                .build()
+
+            val uploadRequest = Request.Builder()
+                .url("https://qalam249-whisperx.hf.space/gradio_api/upload")
+                .post(requestBody)
+                .build()
+
+            val uploadResponse = client.newCall(uploadRequest).execute()
+            if (!uploadResponse.isSuccessful) throw Exception("Failed to upload audio to whisperx space")
+            val uploadResponseBody = uploadResponse.body?.string() ?: throw Exception("Empty upload response")
+            val jArray = org.json.JSONArray(uploadResponseBody)
+            val remotePath = jArray.getString(0)
+
+            // 2. Call /gradio_api/call/v2/align_audio
+            val alignPayload = org.json.JSONObject().apply {
+                put("audio_file", org.json.JSONObject().apply {
+                    put("path", remotePath)
+                    put("meta", org.json.JSONObject().apply {
+                        put("_type", "gradio.FileData")
+                    })
+                })
+                put("text", text)
+            }
+
+            val jsonMediaType = "application/json".toMediaTypeOrNull()
+            val alignRequest = Request.Builder()
+                .url("https://qalam249-whisperx.hf.space/gradio_api/call/v2/align_audio")
+                .post(alignPayload.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            val alignResponse = client.newCall(alignRequest).execute()
+            if (!alignResponse.isSuccessful) throw Exception("Failed to trigger WhisperX alignment")
+            val alignResponseBody = alignResponse.body?.string() ?: throw Exception("Empty alignment response")
+            val eventIdJson = org.json.JSONObject(alignResponseBody)
+            val eventId = eventIdJson.getString("event_id")
+
+            // 3. Poll /gradio_api/call/align_audio/{event_id}
+            val eventRequest = Request.Builder()
+                .url("https://qalam249-whisperx.hf.space/gradio_api/call/align_audio/$eventId")
+                .get()
+                .build()
+
+            var attempt = 0
+            while (attempt < 15) {
+                val eventResponse = client.newCall(eventRequest).execute()
+                if (!eventResponse.isSuccessful) {
+                    eventResponse.close()
+                    throw Exception("Failed to fetch alignment results")
+                }
+                val responseBody = eventResponse.body ?: throw Exception("Empty response body from alignment stream")
+                val reader = responseBody.charStream().buffered()
+                var line: String?
+                var completedData: String? = null
+                while (reader.readLine().also { line = it } != null) {
+                    val currentLine = line ?: ""
+                    if (currentLine.startsWith("event: complete")) {
+                        val nextLine = reader.readLine() ?: ""
+                        if (nextLine.startsWith("data: ")) {
+                            completedData = nextLine.substring("data: ".length)
+                        }
+                    }
+                }
+                eventResponse.close()
+
+                if (completedData != null) {
+                    val dataArray = org.json.JSONArray(completedData)
+                    if (dataArray.length() > 0) {
+                        val firstItem = dataArray.get(0)
+                        if (firstItem is org.json.JSONObject && firstItem.has("error")) {
+                            throw Exception("WhisperX Alignment error: " + firstItem.getString("error"))
+                        }
+
+                        val wordsArray = dataArray.getJSONArray(0)
+                        for (wIdx in 0 until wordsArray.length()) {
+                            val wordObj = wordsArray.getJSONObject(wIdx)
+                            val startSec = wordObj.optDouble("start", -1.0)
+                            val endSec = wordObj.optDouble("end", -1.0)
+                            if (startSec >= 0.0 && endSec >= 0.0) {
+                                wordSegments.add(
+                                    WordSegment(
+                                        wordIndex = wIdx + 1,
+                                        startTimeMs = (startSec * 1000).toLong(),
+                                        endTimeMs = (endSec * 1000).toLong()
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    break
+                }
+                attempt++
+                Thread.sleep(1000)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return wordSegments
+    }
+
+    private fun getSmartChunks(
+        arabicText: String,
+        englishText: String?,
+        wordSegments: List<WordSegment>,
+        durationMs: Long
+    ): List<SmartChunk> {
+        val rawArabicWords = arabicText.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        val arabicWords = rawArabicWords.map { 
+            it.replace("[ۗۖۚۘۙۛ۞۩]".toRegex(), "").trim()
+        }.filter { it.isNotBlank() }
+        
+        if (arabicWords.isEmpty()) {
+            return listOf(SmartChunk(arabicText, englishText, 0L, durationMs))
+        }
+        
+        val englishWords = englishText?.split("\\s+".toRegex())?.filter { it.isNotBlank() } ?: emptyList()
+        
+        val maxWordsInChunk = when {
+            arabicWords.size <= 4 -> 2
+            arabicWords.size <= 8 -> 3
+            else -> 4
+        }
+        
+        val chunks = mutableListOf<List<Int>>() 
+        var currentChunk = mutableListOf<Int>()
+        for (idx in arabicWords.indices) {
+            currentChunk.add(idx)
+            if (currentChunk.size >= maxWordsInChunk) {
+                chunks.add(currentChunk)
+                currentChunk = mutableListOf()
+            }
+        }
+        if (currentChunk.isNotEmpty()) {
+            chunks.add(currentChunk)
+        }
+        
+        val totalArabic = arabicWords.size
+        val totalEnglish = englishWords.size
+        val englishChunks = mutableListOf<List<String>>()
+        var englishIndex = 0
+        
+        chunks.forEachIndexed { index, arabicIndices ->
+            val proportion = arabicIndices.size.toDouble() / totalArabic.toDouble()
+            val numEnglishWords = if (index == chunks.size - 1) {
+                totalEnglish - englishIndex
+            } else {
+                Math.round(proportion * totalEnglish).toInt().coerceAtLeast(1)
+            }.coerceAtMost(totalEnglish - englishIndex)
+            
+            val chunkEngWords = if (numEnglishWords > 0 && englishIndex < totalEnglish) {
+                val sub = englishWords.subList(englishIndex, englishIndex + numEnglishWords)
+                englishIndex += numEnglishWords
+                sub
+            } else {
+                emptyList()
+            }
+            englishChunks.add(chunkEngWords)
+        }
+        
+        val adjustedWordSegments = wordSegments.sortedBy { it.startTimeMs }
+        
+        fun getWordStartTime(wordIdx: Int): Long {
+            val seg = adjustedWordSegments.find { it.wordIndex == wordIdx + 1 }
+            if (seg != null) return seg.startTimeMs
+            val fraction = wordIdx.toFloat() / totalArabic.toFloat()
+            return (fraction * durationMs).toLong()
+        }
+        
+        fun getWordEndTime(wordIdx: Int): Long {
+            val seg = adjustedWordSegments.find { it.wordIndex == wordIdx + 1 }
+            if (seg != null) return seg.endTimeMs
+            val fraction = (wordIdx + 1).toFloat() / totalArabic.toFloat()
+            return (fraction * durationMs).toLong()
+        }
+        
+        val result = mutableListOf<SmartChunk>()
+        for (cIdx in chunks.indices) {
+            val arabicIndices = chunks[cIdx]
+            val chunkArabicText = arabicIndices.map { arabicWords[it] }.joinToString(" ")
+            val chunkEnglishText = if (englishChunks.isNotEmpty() && cIdx < englishChunks.size) {
+                englishChunks[cIdx].joinToString(" ")
+            } else {
+                null
+            }
+            
+            val startMs = getWordStartTime(arabicIndices.first())
+            val endMs = getWordEndTime(arabicIndices.last())
+            
+            result.add(SmartChunk(chunkArabicText, if (chunkEnglishText.isNullOrBlank()) null else chunkEnglishText, startMs, endMs))
+        }
+        return result
+    }
+
+    private fun getActiveSmartChunk(chunks: List<SmartChunk>, currentTimeMs: Long): SmartChunk? {
+        if (chunks.isEmpty()) return null
+        for (chunk in chunks) {
+            if (currentTimeMs >= chunk.startTimeMs && currentTimeMs <= chunk.endTimeMs) {
+                return chunk
+            }
+        }
+        val passed = chunks.filter { currentTimeMs >= it.startTimeMs }
+        if (passed.isNotEmpty()) {
+            return passed.last()
+        }
+        return chunks.first()
     }
 }
 
