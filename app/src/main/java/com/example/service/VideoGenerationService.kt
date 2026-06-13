@@ -85,6 +85,7 @@ class VideoGenerationService : Service() {
                     },
                     0f
                 )
+                val includeBasmalah = settingsManager.includeBasmalah.first()
                 val videoGenerator = VideoGenerator()
 
                 videoGenerator.generateReel(
@@ -96,6 +97,7 @@ class VideoGenerationService : Service() {
                     showTranslation = showTranslation,
                     pexelsApiKey = pexelsApiKey,
                     isRetry = isRetry,
+                    includeBasmalah = includeBasmalah,
                     onProgress = { msg, progress ->
                         _serviceState.value = ReelState.Loading(msg, progress)
                         updateNotificationProgress(msg, progress, isArabic)

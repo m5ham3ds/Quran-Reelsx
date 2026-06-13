@@ -631,6 +631,52 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                         }
                     }
 
+                    // Basmalah Option Switch
+                    val includeBasmalahState by settingsManager.includeBasmalah.collectAsState(initial = true)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(ScreenBg.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .border(width = 1.dp, color = BorderColor, shape = RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                            .clickable {
+                                scope.launch {
+                                    settingsManager.setIncludeBasmalah(!includeBasmalahState)
+                                }
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text(
+                                text = if (isArabic) "البدء بالبسملة" else "Start with Basmalah",
+                                color = TextSoftColor,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 14.sp
+                            )
+                            Text(
+                                text = if (isArabic) "إضافة (بسم الله الرحمن الرحيم) في بداية مقطع الفيديو بصوت القارئ المختار وسليمة المزامنة" else "Begin the video rendering with the standard Basmalah recitation and timings",
+                                color = TextMutedColor,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Switch(
+                            checked = includeBasmalahState,
+                            onCheckedChange = { value ->
+                                scope.launch {
+                                    settingsManager.setIncludeBasmalah(value)
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = ScreenBg,
+                                checkedTrackColor = LuxuryGold,
+                                uncheckedThumbColor = TextMutedColor,
+                                uncheckedTrackColor = BorderColor
+                            ),
+                            modifier = Modifier.testTag("basmalah_switch")
+                        )
+                    }
+
                     // Availability Indicator & Warning Banners
                     if (isCheckingAvailability) {
                         Row(

@@ -85,6 +85,7 @@ class VideoGenerator {
         showTranslation: Boolean,
         pexelsApiKey: String,
         isRetry: Boolean = false,
+        includeBasmalah: Boolean = true,
         onProgress: (String, Float) -> Unit,
         onComplete: (Uri) -> Unit,
         onError: (String) -> Unit
@@ -122,15 +123,102 @@ class VideoGenerator {
             val translationFontFamily = settingsManager.translationFontFamily.first()
             val pixabayApiKey = settingsManager.pixabayApiKey.first()
             
+            // Optional: Prepend Basmalah (بسم الله الرحمن الرحيم) as a separate verse/card
+            if (includeBasmalah && surah != 1 && surah != 9) {
+                onProgress(if (isArabic) "جاري تهيئة البسملة المباركة..." else "Initializing blessed Basmalah...", 0.02f)
+                try {
+                    val basmalahText = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+                    val basmalahTranslation = if (showTranslation) "In the name of Allah, the Entirely Merciful, the Especially Merciful" else null
+                    
+                    val audioFileName = "${reciterId}_basmalah.mp3"
+                    val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/1.mp3" // Universal Basmalah is Surah 1 Ayah 1 of the chosen reciter
+                    val destFile = File(context.cacheDir, audioFileName)
+                    
+                    downloadAudio(url, destFile)
+                    val alignedSegments = alignWithWhisperX(destFile, basmalahText)
+                    
+                    val aacFileName = "${reciterId}_basmalah_transcoded.m4a"
+                    val aacFile = File(context.cacheDir, aacFileName)
+                    val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
+                    
+                    val ext = MediaExtractor().apply { setDataSource(aacFile.absolutePath) }
+                    ext.selectTrack(0)
+                    var durationUs = ext.getTrackFormat(0).getLong(MediaFormat.KEY_DURATION, -1L)
+                    if (durationUs <= 0) {
+                        var maxTs = 0L
+                        val bb = ByteBuffer.allocate(256)
+                        while (ext.readSampleData(bb, 0) >= 0) {
+                            maxTs = ext.sampleTime
+                            ext.advance()
+                        }
+                        durationUs = maxTs
+                    }
+                    ext.release()
+                    
+                    val durationMs = durationUs / 1000
+                    val smartChunks = getSmartChunks(context, basmalahText, basmalahTranslation, alignedSegments, durationMs)
+                    verses.add(VerseData(basmalahText, basmalahTranslation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            
             // 2. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
             for (i in 0 until totalAyahs) {
                 val ayah = startAyah + i
                 onProgress(if (isArabic) "جاري تحميل الآية $ayah وحفظ مراجع الصوت..." else "Downloading reference audio for Ayah $ayah...", 0.05f + (i * 0.2f / totalAyahs))
                 
                 val verseInfo = fetchVerseInfo(surah, ayah, "quran-uthmani")
-                val text = verseInfo.first
+                var text = verseInfo.first
                 val globalAyahNumber = verseInfo.second
-                val translation = if (showTranslation) fetchVerseInfo(surah, ayah, "en.asad").first else null
+                var translation = if (showTranslation) fetchVerseInfo(surah, ayah, "en.asad").first else null
+
+                // Strip / Clean prepended Basmalah from Ayah 1 text & translation of any surah (except 1 and 9)
+                if (surah != 1 && surah != 9 && ayah == 1) {
+                    val standardBasmalah = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+                    text = text.trim()
+                    if (text.startsWith(standardBasmalah)) {
+                        text = text.substring(standardBasmalah.length).trim()
+                    } else {
+                        val keywords = listOf("بِسْمِ اللَّهِ", "بِسْمِ اللهِ", "بِسْمِ")
+                        for (kw in keywords) {
+                            if (text.startsWith(kw)) {
+                                val index = text.indexOf("الرَّحِيمِ")
+                                if (index != -1 && index < 60) {
+                                    text = text.substring(index + "الرَّحِيمِ".length).trim()
+                                    break
+                                }
+                                val index2 = text.indexOf("الرَّحِيْمِ")
+                                if (index2 != -1 && index2 < 60) {
+                                    text = text.substring(index2 + "الرَّحِيْمِ".length).trim()
+                                    break
+                                }
+                            }
+                        }
+                    }
+
+                    if (translation != null) {
+                        val basmalahEnglishList = listOf(
+                            "In the name of God, the Most Gracious, the Most Merciful",
+                            "In the name of God, Most Gracious, Most Merciful",
+                            "In the name of Allah, the Entirely Merciful, the Especially Merciful",
+                            "In the name of Allah, the Beneficent, the Merciful",
+                            "In the name of Allah, the Compassionate, the Merciful",
+                            "In the name of God, the Compassionate, the Merciful"
+                        )
+                        var cleanTrans = translation.trim()
+                        for (b in basmalahEnglishList) {
+                            if (cleanTrans.lowercase().startsWith(b.lowercase())) {
+                                cleanTrans = cleanTrans.substring(b.length).trim()
+                                if (cleanTrans.startsWith("-") || cleanTrans.startsWith(".") || cleanTrans.startsWith(":") || cleanTrans.startsWith(",")) {
+                                    cleanTrans = cleanTrans.substring(1).trim()
+                                }
+                                break
+                            }
+                        }
+                        translation = cleanTrans
+                    }
+                }
 
                 val audioFileName = "${reciterId}_${surah}_${ayah}.mp3"
                 val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyahNumber.mp3"

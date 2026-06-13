@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/ic_app_foreground_logo_1781010433570"
+        android:drawable="@drawable/quran_logo_new_1781377477050"
         android:gravity="center" />
 </layer-list>
