@@ -59,6 +59,25 @@ import com.example.ui.social.SocialMediaScreen
 import com.example.ui.theme.MyApplicationTheme
 import kotlinx.coroutines.launch
 
+fun String.parseArabicOrEnglishDigits(): Int? {
+    val englishStr = this.map { ch ->
+        when (ch) {
+            '٠' -> '0'
+            '١' -> '1'
+            '٢' -> '2'
+            '٣' -> '3'
+            '٤' -> '4'
+            '٥' -> '5'
+            '٦' -> '6'
+            '٧' -> '7'
+            '٨' -> '8'
+            '٩' -> '9'
+            else -> ch
+        }
+    }.joinToString("").trim()
+    return englishStr.toIntOrNull()
+}
+
 val SURAH_NAMES = listOf(
     "الفاتحة", "البقرة", "آل عمران", "النساء", "المائدة", "الأنعام", "الأعراف", "الأنفال", "التوبة", "يونس", "هود", "يوسف", "الرعد", "إبراهيم", "الحجر", "النحل", "الإسراء", "الكهف", "مريم", "طه", "الأنبياء", "الحج", "المؤمنون", "النور", "الفرقان", "الشعراء", "النمل", "القصص", "العنكبوت", "الروم", "لقمان", "السجدة", "الأحزاب", "سبأ", "فاطر", "يس", "الصافات", "ص", "الزمر", "غافر", "فصلت", "الشورى", "الزخرف", "الدخان", "الجاثية", "الأحقاف", "محمد", "الفتح", "الحجرات", "ق", "الذاريات", "الطور", "النجم", "القمر", "الرحمن", "الواقعة", "الحديد", "المجادلة", "الحشر", "الممتحنة", "الصف", "الجمعة", "المنافقون", "التغابن", "الطلاق", "التحريم", "الملك", "القلم", "الحاقة", "المعارج", "نوح", "الجن", "المزمل", "المدثر", "القيامة", "الإنسان", "المرسلات", "النبأ", "النازعات", "عبس", "التكوير", "الإنفطار", "المطففين", "الانشقاق", "البروج", "الطارق", "الأعلى", "الغاشية", "الفجر", "البلد", "الشمس", "الليل", "الضحى", "الشرح", "التين", "العلق", "القدر", "البينة", "الزلزلة", "العاديات", "القارعة", "التكاثر", "العصر", "الهمزة", "الفيل", "قريش", "الماعون", "الكوثر", "الكافرون", "النصر", "المسد", "الإخلاص", "الفلق", "الناس"
 )
@@ -389,8 +408,8 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
 
     LaunchedEffect(selectedSurahIdx, startAyahText, endAyahText, selectedReciterIdx, recitersList) {
         val surah = selectedSurahIdx + 1
-        val start = startAyahText.toIntOrNull() ?: 1
-        val end = endAyahText.toIntOrNull() ?: start
+        val start = startAyahText.parseArabicOrEnglishDigits() ?: 1
+        val end = endAyahText.parseArabicOrEnglishDigits() ?: start
         val reciterId = if (recitersList.isNotEmpty() && selectedReciterIdx < recitersList.size) {
             recitersList[selectedReciterIdx].first
         } else {
@@ -538,8 +557,8 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
 
                     // Calculate clean bounds
                     val maxAyahs = SURAH_COUNTS[selectedSurahIdx + 1] ?: 1
-                    val cStart = (startAyahText.toIntOrNull() ?: 1).coerceIn(1, maxAyahs)
-                    val cEnd = (endAyahText.toIntOrNull() ?: cStart).coerceIn(cStart, maxAyahs)
+                    val cStart = (startAyahText.parseArabicOrEnglishDigits() ?: 1).coerceIn(1, maxAyahs)
+                    val cEnd = (endAyahText.parseArabicOrEnglishDigits() ?: cStart).coerceIn(cStart, maxAyahs)
                     val countSelected = cEnd - cStart + 1
 
                     // Determine border & background colors based on availability
@@ -787,8 +806,8 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                 } catch (e: Exception) {}
 
                                 val onGenerateAction = {
-                                    val start = startAyahText.toIntOrNull() ?: 1
-                                    val end = endAyahText.toIntOrNull() ?: start
+                                    val start = startAyahText.parseArabicOrEnglishDigits() ?: 1
+                                    val end = endAyahText.parseArabicOrEnglishDigits() ?: start
                                     val maxAyahs = SURAH_COUNTS[selectedSurahIdx + 1] ?: 1
                                     
                                     val cStart = start.coerceIn(1, maxAyahs)

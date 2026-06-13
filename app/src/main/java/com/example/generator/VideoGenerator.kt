@@ -296,7 +296,7 @@ class VideoGenerator {
                                 availableVideosList.add(videos.getJSONObject(vIdx))
                             }
                             
-                            for (vidIdx in 0 until totalAyahs) {
+                            for (vidIdx in verses.indices) {
                                 val verse = verses[vidIdx]
                                 val neededDurSec = (verse.durationUs / 1000000L).toInt() + 2
                                 
@@ -343,8 +343,8 @@ class VideoGenerator {
                                     
                                     if (selectedVideoUrl != null) {
                                         onProgress(
-                                            if (isArabic) "جاري تحميل مشهد متناسق للمقطع ${vidIdx + 1} من $totalAyahs..." else "Downloading duration-matched scene ${vidIdx + 1} of $totalAyahs...",
-                                            0.35f + (vidIdx * 0.15f / totalAyahs)
+                                            if (isArabic) "جاري تحميل مشهد متناسق للمقطع ${vidIdx + 1} من ${verses.size}..." else "Downloading duration-matched scene ${vidIdx + 1} of ${verses.size}...",
+                                            0.35f + (vidIdx * 0.15f / verses.size)
                                         )
                                         val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
                                         downloadAudio(selectedVideoUrl, targetFile)
@@ -387,7 +387,7 @@ class VideoGenerator {
                                 availableHitsList.add(hits.getJSONObject(hIdx))
                             }
                             
-                            for (vidIdx in 0 until totalAyahs) {
+                            for (vidIdx in verses.indices) {
                                 val verse = verses[vidIdx]
                                 val neededDurSec = (verse.durationUs / 1000000L).toInt() + 2
                                 
@@ -419,8 +419,8 @@ class VideoGenerator {
                                     }
                                     if (selectedVideoUrl != null) {
                                         onProgress(
-                                            if (isArabic) "جاري تحميل مشهد متناسق للمقطع ${vidIdx + 1} من $totalAyahs..." else "Downloading duration-matched scene ${vidIdx + 1} of $totalAyahs...",
-                                            0.35f + (vidIdx * 0.15f / totalAyahs)
+                                            if (isArabic) "جاري تحميل مشهد متناسق للمقطع ${vidIdx + 1} من ${verses.size}..." else "Downloading duration-matched scene ${vidIdx + 1} of ${verses.size}...",
+                                            0.35f + (vidIdx * 0.15f / verses.size)
                                         )
                                         val targetFile = File(context.cacheDir, "bg_video_$vidIdx.mp4")
                                         downloadAudio(selectedVideoUrl, targetFile)
@@ -448,7 +448,7 @@ class VideoGenerator {
                     "https://assets.mixkit.co/videos/preview/mixkit-vertical-shot-of-the-sea-under-a-clear-sky-40767-large.mp4",
                     "https://assets.mixkit.co/videos/preview/mixkit-light-rain-falling-on-green-leaves-vertical-shot-42022-large.mp4"
                 )
-                val countToLoad = Math.min(totalAyahs, directUrls.size)
+                val countToLoad = Math.min(verses.size, directUrls.size)
                 for (vidIdx in 0 until countToLoad) {
                     try {
                         onProgress(
@@ -558,6 +558,7 @@ class VideoGenerator {
             
             val audioThread = thread {
                 try {
+                    var lastWrittenPtsForTrack = -1L
                     for ((idx, verse) in verses.withIndex()) {
                         if (threadError != null) break
                         val audioPtsUs = verseStartTimestampsUs[idx]
@@ -565,6 +566,7 @@ class VideoGenerator {
                         ext.selectTrack(0)
                         val buf = ByteBuffer.allocate(1024 * 1024)
                         val info = MediaCodec.BufferInfo()
+                        
                         while (threadError == null) {
                             val size = ext.readSampleData(buf, 0)
                             if (size < 0) break
@@ -574,7 +576,13 @@ class VideoGenerator {
                             info.flags = if ((ext.sampleFlags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
                                 MediaCodec.BUFFER_FLAG_KEY_FRAME
                             } else 0
-                            info.presentationTimeUs = audioPtsUs + pts
+                            
+                            var targetPts = audioPtsUs + pts
+                            if (idx > 0 && targetPts <= lastWrittenPtsForTrack) {
+                                targetPts = lastWrittenPtsForTrack + 500L
+                            }
+                            lastWrittenPtsForTrack = targetPts
+                            info.presentationTimeUs = targetPts
                             
                             while (!muxerStarted.get() && drainLatch.count > 0 && threadError == null) {
                                 Thread.sleep(10)
@@ -914,6 +922,41 @@ class VideoGenerator {
                 }
             }
             
+            // D. Helper to drain encoder out
+            var lastWrittenPts = -1L
+            fun drainEncoder(isEnd: Boolean = false) {
+                while (true) {
+                    val encOutIdx = encoder.dequeueOutputBuffer(encoderBufferInfo, timeoutUs)
+                    if (encOutIdx >= 0) {
+                        val encBuf = encoder.getOutputBuffer(encOutIdx)!!
+                        if ((encoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                            encoderBufferInfo.size = 0
+                        }
+                        if (encoderBufferInfo.size > 0 && outTrackIdx >= 0) {
+                            encBuf.position(encoderBufferInfo.offset)
+                            encBuf.limit(encoderBufferInfo.offset + encoderBufferInfo.size)
+                            if (encoderBufferInfo.presentationTimeUs <= lastWrittenPts) {
+                                encoderBufferInfo.presentationTimeUs = lastWrittenPts + 100L
+                            }
+                            lastWrittenPts = encoderBufferInfo.presentationTimeUs
+                            muxer.writeSampleData(outTrackIdx, encBuf, encoderBufferInfo)
+                        }
+                        if ((encoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            isEncoderEOS = true
+                        }
+                        encoder.releaseOutputBuffer(encOutIdx, false)
+                    } else if (encOutIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                        outTrackIdx = muxer.addTrack(encoder.outputFormat)
+                        muxer.start()
+                        muxerStarted = true
+                    } else if (encOutIdx == MediaCodec.INFO_TRY_AGAIN_LATER) {
+                        if (!isEnd) break
+                    } else {
+                        break
+                    }
+                }
+            }
+
             // B. Decode output into encoder input
             if (!isDecoderEOS) {
                 val outIdx = decoder.dequeueOutputBuffer(decoderBufferInfo, timeoutUs)
@@ -952,26 +995,7 @@ class VideoGenerator {
                         encInIdx = encoder.dequeueInputBuffer(timeoutUs)
                         if (encInIdx < 0) {
                             // While waiting for an encoder input buffer, we should also drain the encoder output buffer to prevent a deadlock
-                            val encOutIdx = encoder.dequeueOutputBuffer(encoderBufferInfo, timeoutUs)
-                            if (encOutIdx >= 0) {
-                                val encBuf = encoder.getOutputBuffer(encOutIdx)!!
-                                if ((encoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                                    encoderBufferInfo.size = 0
-                                }
-                                if (encoderBufferInfo.size > 0 && outTrackIdx >= 0) {
-                                    encBuf.position(encoderBufferInfo.offset)
-                                    encBuf.limit(encoderBufferInfo.offset + encoderBufferInfo.size)
-                                    muxer.writeSampleData(outTrackIdx, encBuf, encoderBufferInfo)
-                                }
-                                if ((encoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                                    isEncoderEOS = true
-                                }
-                                encoder.releaseOutputBuffer(encOutIdx, false)
-                            } else if (encOutIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                                outTrackIdx = muxer.addTrack(encoder.outputFormat)
-                                muxer.start()
-                                muxerStarted = true
-                            }
+                            drainEncoder(false)
                         }
                     }
                     
@@ -1008,28 +1032,7 @@ class VideoGenerator {
             }
             
             // C. Encode output and write to muxer
-            val encOutIdx = encoder.dequeueOutputBuffer(encoderBufferInfo, timeoutUs)
-            if (encOutIdx >= 0) {
-                val buf = encoder.getOutputBuffer(encOutIdx)!!
-                if ((encoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-                    encoderBufferInfo.size = 0
-                }
-                
-                if (encoderBufferInfo.size > 0 && outTrackIdx >= 0) {
-                    buf.position(encoderBufferInfo.offset)
-                    buf.limit(encoderBufferInfo.offset + encoderBufferInfo.size)
-                    muxer.writeSampleData(outTrackIdx, buf, encoderBufferInfo)
-                }
-                
-                if ((encoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                    isEncoderEOS = true
-                }
-                encoder.releaseOutputBuffer(encOutIdx, false)
-            } else if (encOutIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                outTrackIdx = muxer.addTrack(encoder.outputFormat)
-                muxer.start()
-                muxerStarted = true
-            }
+            drainEncoder(false)
         }
         
         // Cleanup all
