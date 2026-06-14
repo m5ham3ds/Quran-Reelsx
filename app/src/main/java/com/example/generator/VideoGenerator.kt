@@ -61,6 +61,7 @@ data class SurahAudioData(
 )
 
 data class VerseData(
+    val surahName: String,
     val text: String,
     val translation: String?,
     val audioPath: String,
@@ -168,7 +169,7 @@ class VideoGenerator {
                     
                     val durationMs = durationUs / 1000
                     val smartChunks = getSmartChunks(context, basmalahText, basmalahTranslation, alignedSegments, durationMs)
-                    verses.add(VerseData(basmalahText, basmalahTranslation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
+                    verses.add(VerseData("بِسْمِ اللَّهِ", basmalahText, basmalahTranslation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
                     SystemDiagnosticTracker.addLog("BASMALAH", "تم إعداد كارت بطاقة البسملة بنجاح بمدة ${durationMs}ms")
                 } catch (e: Exception) {
                     SystemDiagnosticTracker.addLog("WARN", "فشلت تهيئة البسملة أو تجاوزناها بسبب خطأ: ${e.message}")
@@ -275,7 +276,7 @@ class VideoGenerator {
                 val durationMs = durationUs / 1000
                 SystemDiagnosticTracker.addLog("CHUNKS", "تقسيم الآية $ayah إلى Smart Chunks للمزامنة البصرية")
                 val smartChunks = getSmartChunks(context, text, translation, alignedSegments, durationMs)
-                verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
+                verses.add(VerseData(verseInfo.third, text, translation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
                 SystemDiagnosticTracker.addLog("AYAH_PROCESS", "اكتملت معالجة الآية $ayah بنجاح. المدة الزمنية: ${durationMs}ms، كتل العرض: ${smartChunks.size}")
             }
             
@@ -298,12 +299,14 @@ class VideoGenerator {
                 onProgress(if (isArabic) "جاري البحث عن مشاهد سينمائية سريعة (Pexels)..." else "Searching for dynamic fast-paced cinematic scenes (Pexels)...", 0.3f)
                 try {
                     val pexelsQueries = listOf(
-                        "cinematic+drone+fast+flight+nature",
-                        "speed+drone+flyby+waterfall",
-                        "dynamic+fpv+drone+mountains",
-                        "epic+aerial+coastline+waves+motion",
-                        "cinematic+sunset+landscape+timelapse",
-                        "clouds+hyperlapse+epic+mountain"
+                        "islamic+aesthetics+kaaba+mecca",
+                        "dark+cinematic+aesthetic+landscape",
+                        "stormy+aesthetic+rainy+window",
+                        "moonlight+trees+dark+night",
+                        "epic+sunset+clouds+aesthetic",
+                        "snowy+mountains+cinematic",
+                        "rain+flowers+nature+aesthetic",
+                        "sunset+bike+nature+dark"
                     )
                     val chosenQuery = pexelsQueries.random()
                     val requestUrl = "https://api.pexels.com/videos/search?query=$chosenQuery&orientation=portrait&per_page=30"
@@ -342,30 +345,42 @@ class VideoGenerator {
                                     }
                                     
                                     val videoFiles = selectedVideoJson.getJSONArray("video_files")
-                                    var selectedVideoUrl: String? = null
+                                    var highestResUrl: String? = null
+                                    var highestRes = 0
+                                    
                                     for (v in 0 until videoFiles.length()) {
                                         val fileObj = videoFiles.getJSONObject(v)
                                         val link = fileObj.getString("link")
                                         val width = fileObj.optInt("width", 0)
                                         val height = fileObj.optInt("height", 0)
+                                        val res = width * height
                                         if (width < height && link.contains("mp4", ignoreCase = true)) {
-                                            selectedVideoUrl = link
-                                            break
-                                        }
-                                    }
-                                    if (selectedVideoUrl == null && videoFiles.length() > 0) {
-                                        for (v in 0 until videoFiles.length()) {
-                                            val fileObj = videoFiles.getJSONObject(v)
-                                            val link = fileObj.getString("link")
-                                            if (link.contains("mp4", ignoreCase = true)) {
-                                                selectedVideoUrl = link
-                                                break
+                                            if (res > highestRes || highestResUrl == null) {
+                                                highestResUrl = link
+                                                highestRes = res
                                             }
                                         }
                                     }
-                                    if (selectedVideoUrl == null && videoFiles.length() > 0) {
-                                        selectedVideoUrl = videoFiles.getJSONObject(0).getString("link")
+                                    if (highestResUrl == null && videoFiles.length() > 0) {
+                                        for (v in 0 until videoFiles.length()) {
+                                            val fileObj = videoFiles.getJSONObject(v)
+                                            val link = fileObj.getString("link")
+                                            val width = fileObj.optInt("width", 0)
+                                            val height = fileObj.optInt("height", 0)
+                                            val res = width * height
+                                            if (link.contains("mp4", ignoreCase = true)) {
+                                                if (res > highestRes || highestResUrl == null) {
+                                                    highestResUrl = link
+                                                    highestRes = res
+                                                }
+                                            }
+                                        }
                                     }
+                                    if (highestResUrl == null && videoFiles.length() > 0) {
+                                        highestResUrl = videoFiles.getJSONObject(0).getString("link")
+                                    }
+                                    
+                                    var selectedVideoUrl: String? = highestResUrl
                                     
                                     if (selectedVideoUrl != null) {
                                         onProgress(
@@ -392,11 +407,14 @@ class VideoGenerator {
                 onProgress(if (isArabic) "جاري البحث عن مناظر طبيعية هادئة سريعة (Pixabay)..." else "Searching for active nature landscapes (Pixabay)...", 0.3f)
                 try {
                     val pixabayQueries = listOf(
-                        "fpv+drone+nature+fast",
-                        "timelapse+clouds+mountains",
-                        "cinematic+waterfall+rapid+aerial",
-                        "epic+mountain+drone+flyover",
-                        "ocean+waves+stormy+aerial"
+                        "islamic+aesthetics",
+                        "dark+cinematic+aesthetic+landscape",
+                        "stormy+aesthetic+rain",
+                        "moonlight+trees+dark+night",
+                        "epic+sunset+clouds+aesthetic",
+                        "snowy+mountains+cinematic",
+                        "rain+nature+aesthetic",
+                        "sunset+bike+nature+dark"
                     )
                     val chosenPixabayQuery = pixabayQueries.random()
                     val request = Request.Builder()
@@ -686,6 +704,7 @@ class VideoGenerator {
                     val chunkedTranslation = activeChunk?.english ?: verse.translation
                     
                     val bitmap = createVerseBitmap(
+                        surahName = verse.surahName,
                         text = chunkedText,
                         translation = chunkedTranslation,
                         bgBitmap = bgFrameBitmap,
@@ -854,7 +873,7 @@ class VideoGenerator {
         }
     }
 
-    private fun fetchVerseInfo(surah: Int, ayah: Int, edition: String): Pair<String, Int> {
+    private fun fetchVerseInfo(surah: Int, ayah: Int, edition: String): Triple<String, Int, String> {
         val url = "https://api.alquran.cloud/v1/ayah/$surah:$ayah/$edition"
         val request = Request.Builder().url(url).build()
         val response = client.newCall(request).execute()
@@ -862,7 +881,9 @@ class VideoGenerator {
         val body = response.body?.string() ?: ""
         val json = JSONObject(body)
         val data = json.getJSONObject("data")
-        return Pair(data.getString("text"), data.getInt("number"))
+        val surahObj = data.getJSONObject("surah")
+        val surahName = surahObj.getString("name")
+        return Triple(data.getString("text"), data.getInt("number"), surahName)
     }
 
     private fun downloadAudio(url: String, destFile: File) {
@@ -1309,6 +1330,7 @@ class VideoGenerator {
     }
 
     private fun createVerseBitmap(
+        surahName: String,
         text: String,
         translation: String?,
         bgBitmap: Bitmap?,
@@ -1397,6 +1419,17 @@ class VideoGenerator {
                 canvas.drawCircle(baseX, driftY, size, starPaint)
             }
         }
+        
+        // Draw Surah Name at top
+        val surahPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            alpha = (textOpacity * 255).toInt().coerceIn(0, 255)
+            this.textAlign = Paint.Align.CENTER
+            typeface = Typeface.create("serif", Typeface.NORMAL)
+            textSize = 50f
+            setShadowLayer(8f, 0f, 4f, Color.argb(200, 0, 0, 0))
+        }
+        canvas.drawText(surahName, 360f, 180f, surahPaint)
         
         // 2. Typeface config
         val tf = when (fontFamily) {
@@ -1508,28 +1541,23 @@ class VideoGenerator {
         sl.draw(canvas)
         canvas.restore()
         
-        // 6. Draw translation with divider line
+        // 6. Draw translation with divider heart
         if (transSl != null) {
             canvas.save()
-            
-            // Draw a beautiful elegant thin separator divider as in the App live preview!
-            val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = transColor
-                setAlpha(90)
-                strokeWidth = 3f
-                style = Paint.Style.STROKE
-            }
-            val dividerY = startY + sl.height + 25f
-            
-            when (textAlign) {
-                "Left" -> canvas.drawLine(50f, dividerY, 150f, dividerY, dividerPaint)
-                "Right" -> canvas.drawLine(570f, dividerY, 670f, dividerY, dividerPaint)
-                else -> canvas.drawLine(310f, dividerY, 410f, dividerY, dividerPaint)
-            }
-            
-            canvas.translate(50f, startY + sl.height + 60f)
+            val transY = startY + sl.height + 40f
+            canvas.translate(50f, transY)
             transSl.draw(canvas)
             canvas.restore()
+            
+            val heartPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = transColor
+                this.alpha = 200
+                textSize = 35f
+                this.textAlign = Paint.Align.CENTER
+                setShadowLayer(4f, 0f, 2f, Color.argb(200, 0, 0, 0))
+            }
+            val heartY = transY + transSl.height + 60f
+            canvas.drawText("♡", 360f, heartY, heartPaint)
         }
         
         return bitmap
