@@ -809,6 +809,12 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                                         permissionsNeeded.add(Manifest.permission.READ_MEDIA_AUDIO)
                                     }
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                                        permissionsNeeded.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                    }
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                                        permissionsNeeded.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+                                    }
                                 } else {
                                     try {
                                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {

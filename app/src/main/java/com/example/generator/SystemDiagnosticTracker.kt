@@ -101,10 +101,9 @@ object SystemDiagnosticTracker {
             permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
             permissions.add(android.Manifest.permission.READ_MEDIA_VIDEO)
             permissions.add(android.Manifest.permission.READ_MEDIA_AUDIO)
-        } else {
-            permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-            permissions.add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
+        permissions.add(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        permissions.add(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
 
         for (p in permissions) {
             try {
