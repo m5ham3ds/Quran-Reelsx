@@ -1825,17 +1825,20 @@ class VideoGenerator {
                         }
 
                         var wordsArray: org.json.JSONArray? = null
-                        try {
-                            val obj = dataArray.getJSONObject(0)
-                            if (obj.has("words")) {
-                                wordsArray = obj.getJSONArray("words")
+                        if (firstItem is org.json.JSONObject) {
+                            if (firstItem.has("words")) {
+                                wordsArray = firstItem.getJSONArray("words")
+                            } else if (firstItem.has("segments")) {
+                                wordsArray = firstItem.getJSONArray("segments")
                             }
-                        } catch(e: Exception) {
-                            // Ignored, might not be a JSONObject
+                        } else if (firstItem is org.json.JSONArray) {
+                            wordsArray = firstItem
                         }
                         
                         if (wordsArray == null) {
-                            wordsArray = dataArray.getJSONArray(0)
+                            val errStr = "لم يتم العثور على مصفوفة كلمات في استجابة WhisperX"
+                            SystemDiagnosticTracker.addLog("ERROR", errStr + ". الاستجابة: $completedData")
+                            throw Exception(errStr)
                         }
                         SystemDiagnosticTracker.addLog("WHISPERX_API", "عدد الكلمات المرجعة من WhisperX: ${wordsArray!!.length()}")
                         for (wIdx in 0 until wordsArray.length()) {

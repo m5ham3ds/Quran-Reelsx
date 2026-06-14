@@ -421,9 +421,14 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
         viewModel.checkCurrentAyahsAvailability(surah, start, end, reciterId)
     }
 
+    var delayedGenerateAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ -> }
+    ) { _ -> 
+        delayedGenerateAction?.invoke()
+        delayedGenerateAction = null
+    }
 
     // Load initial values from settings on start
     val savedSurahIdx by settingsManager.selectedSurahIdx.collectAsState(initial = -1)
@@ -798,15 +803,22 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                                         permissionsNeeded.add(Manifest.permission.POST_NOTIFICATIONS)
                                     }
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_VIDEO) != PackageManager.PERMISSION_GRANTED) {
+                                        permissionsNeeded.add(Manifest.permission.READ_MEDIA_VIDEO)
+                                    }
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                                        permissionsNeeded.add(Manifest.permission.READ_MEDIA_AUDIO)
+                                    }
+                                } else {
+                                    try {
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                                            permissionsNeeded.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                        }
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                                            permissionsNeeded.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+                                        }
+                                    } catch (e: Exception) {}
                                 }
-                                try {
-                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                                        permissionsNeeded.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                                    }
-                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                                        permissionsNeeded.add(Manifest.permission.READ_EXTERNAL_STORAGE)
-                                    }
-                                } catch (e: Exception) {}
 
                                 val onGenerateAction = {
                                     val start = startAyahText.parseArabicOrEnglishDigits() ?: 1
@@ -826,8 +838,8 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                 }
 
                                 if (permissionsNeeded.isNotEmpty()) {
+                                    delayedGenerateAction = onGenerateAction
                                     permissionLauncher.launch(permissionsNeeded.toTypedArray())
-                                    onGenerateAction()
                                 } else {
                                     onGenerateAction()
                                 }
