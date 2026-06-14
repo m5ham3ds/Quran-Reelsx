@@ -1874,23 +1874,78 @@ class VideoGenerator {
         }
         
         val englishWords = englishText?.split("\\s+".toRegex())?.filter { it.isNotBlank() } ?: emptyList()
+        val adjustedWordSegments = wordSegments.sortedBy { it.startTimeMs }
+        
+        val cleanSegs = adjustedWordSegments.map { 
+            it.word.replace("[^\\p{L}]".toRegex(), "") 
+        }
+        val cleanArabic = arabicWords.map { 
+            it.replace("[^\\p{L}]".toRegex(), "") 
+        }
+
+        val wordSegMap = mutableMapOf<Int, WordSegment>()
+        var sIdx = 0
+        for (aIdx in cleanArabic.indices) {
+            val aWord = cleanArabic[aIdx]
+            if (aWord.isEmpty()) continue
+            
+            var matched = false
+            for (lookAhead in 0 until 5) {
+                val checkIdx = sIdx + lookAhead
+                if (checkIdx < cleanSegs.size && cleanSegs[checkIdx].isNotEmpty()) {
+                    if (cleanSegs[checkIdx] == aWord || cleanSegs[checkIdx].contains(aWord) || aWord.contains(cleanSegs[checkIdx])) {
+                        wordSegMap[aIdx] = adjustedWordSegments[checkIdx]
+                        sIdx = checkIdx + 1
+                        matched = true
+                        break
+                    }
+                }
+            }
+            if (!matched && sIdx < cleanSegs.size) {
+                 wordSegMap[aIdx] = adjustedWordSegments[sIdx]
+                 sIdx++
+            }
+        }
+        
+        fun getWordTimingSafe(aIdx: Int): Pair<Long, Long>? {
+            val seg = wordSegMap[aIdx]
+            if (seg != null) return Pair(seg.startTimeMs, seg.endTimeMs)
+            return null
+        }
         
         val chunks = mutableListOf<List<Int>>() 
         var currentChunk = mutableListOf<Int>()
         for (idx in arabicWords.indices) {
             currentChunk.add(idx)
             val word = arabicWords[idx]
-            val hasPauseMark = word.contains(Regex("[ۗۖۚۘۙۛ]"))
-            if (hasPauseMark || idx == arabicWords.indices.last) {
-                chunks.add(currentChunk)
-                currentChunk = mutableListOf()
+            val hasPauseMark = word.contains(Regex("[ۗۖۚۘۙۛ۞۩]"))
+            
+            var hasSilence = false
+            if (idx < arabicWords.indices.last) {
+                val currEnd = getWordTimingSafe(idx)?.second
+                val nextStart = getWordTimingSafe(idx + 1)?.first
+                if (currEnd != null && nextStart != null) {
+                    if (nextStart - currEnd > 300L) { // Gap of >300ms implies silence
+                        hasSilence = true
+                    }
+                }
             }
+            
+            if (hasPauseMark || hasSilence || idx == arabicWords.indices.last) {
+                if (currentChunk.isNotEmpty()) {
+                    chunks.add(currentChunk)
+                    currentChunk = mutableListOf()
+                }
+            }
+        }
+        if (currentChunk.isNotEmpty()) {
+            chunks.add(currentChunk)
         }
         
         val refinedChunks = mutableListOf<List<Int>>()
         for (chunk in chunks) {
-            if (chunk.size > 15) {
-                val subChunks = chunk.chunked(10)
+            if (chunk.size > 25) { 
+                val subChunks = chunk.chunked(15)
                 refinedChunks.addAll(subChunks)
             } else {
                 refinedChunks.add(chunk)
@@ -1935,43 +1990,9 @@ class VideoGenerator {
             englishChunkTexts = englishChunks.map { it.joinToString(" ") }
         }
         
-        val adjustedWordSegments = wordSegments.sortedBy { it.startTimeMs }
-        
-        val cleanSegs = adjustedWordSegments.map { 
-            it.word.replace("[^\\p{L}]".toRegex(), "") 
-        }
-        val cleanArabic = arabicWords.map { 
-            it.replace("[^\\p{L}]".toRegex(), "") 
-        }
-
-        val wordSegMap = mutableMapOf<Int, WordSegment>()
-        var sIdx = 0
-        for (aIdx in cleanArabic.indices) {
-            val aWord = cleanArabic[aIdx]
-            if (aWord.isEmpty()) continue
-            
-            var matched = false
-            for (lookAhead in 0 until 5) {
-                val checkIdx = sIdx + lookAhead
-                if (checkIdx < cleanSegs.size && cleanSegs[checkIdx].isNotEmpty()) {
-                    if (cleanSegs[checkIdx] == aWord || cleanSegs[checkIdx].contains(aWord) || aWord.contains(cleanSegs[checkIdx])) {
-                        wordSegMap[aIdx] = adjustedWordSegments[checkIdx]
-                        sIdx = checkIdx + 1
-                        matched = true
-                        break
-                    }
-                }
-            }
-            if (!matched && sIdx < cleanSegs.size) {
-                 // Greedy advance to remain in sync
-                 wordSegMap[aIdx] = adjustedWordSegments[sIdx]
-                 sIdx++
-            }
-        }
-        
         fun getWordTiming(aIdx: Int, fallbackRatio: Float): Pair<Long, Long> {
-            val seg = wordSegMap[aIdx]
-            if (seg != null) return Pair(seg.startTimeMs, seg.endTimeMs)
+            val safe = getWordTimingSafe(aIdx)
+            if (safe != null) return safe
             val fallbackTime = (fallbackRatio * durationMs).toLong()
             return Pair(fallbackTime, fallbackTime)
         }
