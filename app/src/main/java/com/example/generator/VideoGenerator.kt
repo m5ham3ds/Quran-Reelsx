@@ -638,6 +638,12 @@ class VideoGenerator {
                         throw Exception("خطأ في قنوات المعالجة الخلفية: ${threadError?.localizedMessage}")
                     }
                     
+                    if (i % 30 == 0 && i > 0) {
+                        val baseProgress = 0.5f + (idx * 0.4f / verses.size)
+                        val frameProgress = (i.toFloat() / framesNeeded.toFloat()) * (0.4f / verses.size)
+                        onProgress(if (isArabic) "تصوير الآية ${startAyah + idx} (${(i * 100 / framesNeeded)}%)..." else "Rendering Ayah ${startAyah + idx} (${(i * 100 / framesNeeded)}%)...", baseProgress + frameProgress)
+                    }
+                    
                     var bgFrameBitmap: Bitmap? = null
                     if (frameDecoder != null) {
                         try {
@@ -1861,10 +1867,7 @@ class VideoGenerator {
         wordSegments: List<WordSegment>,
         durationMs: Long
     ): List<SmartChunk> {
-        val rawArabicWords = arabicText.split("\\s+".toRegex()).filter { it.isNotBlank() }
-        val arabicWords = rawArabicWords.map { 
-            it.replace("[ۗۖۚۘۙۛ۞۩]".toRegex(), "").trim()
-        }.filter { it.isNotBlank() }
+        val arabicWords = arabicText.split("\\s+".toRegex()).filter { it.isNotBlank() }
         
         if (arabicWords.isEmpty()) {
             return listOf(SmartChunk(arabicText, englishText, 0L, durationMs))
@@ -1872,36 +1875,39 @@ class VideoGenerator {
         
         val englishWords = englishText?.split("\\s+".toRegex())?.filter { it.isNotBlank() } ?: emptyList()
         
-        val maxWordsInChunk = when {
-            arabicWords.size <= 4 -> 2
-            arabicWords.size <= 8 -> 3
-            else -> 4
-        }
-        
         val chunks = mutableListOf<List<Int>>() 
         var currentChunk = mutableListOf<Int>()
         for (idx in arabicWords.indices) {
             currentChunk.add(idx)
-            if (currentChunk.size >= maxWordsInChunk) {
+            val word = arabicWords[idx]
+            val hasPauseMark = word.contains(Regex("[ۗۖۚۘۙۛ]"))
+            if (hasPauseMark || idx == arabicWords.indices.last) {
                 chunks.add(currentChunk)
                 currentChunk = mutableListOf()
             }
         }
-        if (currentChunk.isNotEmpty()) {
-            chunks.add(currentChunk)
+        
+        val refinedChunks = mutableListOf<List<Int>>()
+        for (chunk in chunks) {
+            if (chunk.size > 15) {
+                val subChunks = chunk.chunked(10)
+                refinedChunks.addAll(subChunks)
+            } else {
+                refinedChunks.add(chunk)
+            }
         }
         
         val totalArabic = arabicWords.size
         val totalEnglish = englishWords.size
         
         // 1. Construct Arabic chunk texts
-        val arabicChunkTexts = chunks.map { arabicIndices ->
+        val arabicChunkTexts = refinedChunks.map { arabicIndices ->
             arabicIndices.map { arabicWords[it] }.joinToString(" ")
         }
         
         // 2. Try aligning with Gemini if translation and API key exist, and we have multiple chunks
         var englishChunkTexts: List<String>? = null
-        if (!englishText.isNullOrBlank() && chunks.size > 1) {
+        if (!englishText.isNullOrBlank() && refinedChunks.size > 1) {
             englishChunkTexts = alignTranslationWithGemini(context, arabicChunkTexts, englishText)
         }
         
@@ -1909,9 +1915,9 @@ class VideoGenerator {
         if (englishChunkTexts == null) {
             val englishChunks = mutableListOf<List<String>>()
             var englishIndex = 0
-            chunks.forEachIndexed { index, arabicIndices ->
+            refinedChunks.forEachIndexed { index, arabicIndices ->
                 val proportion = arabicIndices.size.toDouble() / totalArabic.toDouble()
-                val numEnglishWords = if (index == chunks.size - 1) {
+                val numEnglishWords = if (index == refinedChunks.size - 1) {
                     totalEnglish - englishIndex
                 } else {
                     Math.round(proportion * totalEnglish).toInt().coerceAtLeast(1)
@@ -1971,8 +1977,8 @@ class VideoGenerator {
         }
         
         val result = mutableListOf<SmartChunk>()
-        for (cIdx in chunks.indices) {
-            val arabicIndices = chunks[cIdx]
+        for (cIdx in refinedChunks.indices) {
+            val arabicIndices = refinedChunks[cIdx]
             val chunkArabicText = arabicChunkTexts[cIdx]
             val chunkEnglishText = if (englishChunkTexts != null && cIdx < englishChunkTexts.size) {
                 englishChunkTexts[cIdx]

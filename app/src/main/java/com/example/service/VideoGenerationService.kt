@@ -44,7 +44,7 @@ class VideoGenerationService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) {
             stopSelf()
-            return START_NOT_STICKY
+            return START_STICKY
         }
 
         val action = intent.action
@@ -55,12 +55,12 @@ class VideoGenerationService : Service() {
             }
             val isArabic = language == "ar"
             updateNotificationProgress(lastMessage, lastProgress, isArabic)
-            return START_NOT_STICKY
+            return START_STICKY
         } else if (action == "com.example.action.CANCEL") {
             cancelGeneration()
             stopForeground(true)
             stopSelf()
-            return START_NOT_STICKY
+            return START_STICKY
         }
 
         resetControlFlags()
@@ -129,7 +129,7 @@ class VideoGenerationService : Service() {
             }
         }
 
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     private val completedChannelId = "video_completed_channel"
