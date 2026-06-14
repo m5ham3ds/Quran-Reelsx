@@ -1824,7 +1824,11 @@ class VideoGenerator {
                             throw Exception(errStr)
                         }
 
-                        val wordsArray = dataArray.getJSONArray(0)
+                        val wordsArray = if (firstItem is org.json.JSONObject) {
+                            firstItem.getJSONArray("words")
+                        } else {
+                            dataArray.getJSONArray(0)
+                        }
                         SystemDiagnosticTracker.addLog("WHISPERX_API", "عدد الكلمات المرجعة من WhisperX: ${wordsArray.length()}")
                         for (wIdx in 0 until wordsArray.length()) {
                             val wordObj = wordsArray.getJSONObject(wIdx)
