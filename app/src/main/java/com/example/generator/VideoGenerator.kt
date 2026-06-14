@@ -1667,6 +1667,17 @@ class VideoGenerator {
         return outBytes
     }
 
+    private fun cleanArabicForWhisper(text: String): String {
+        // Remove diacritics and special Uthmani symbols
+        val clean1 = text.replace("[\u064B-\u065F\u0670\u06D6-\u06ED\u0610-\u061A\u0640]".toRegex(), "")
+        // Map any Alif Wasla or other special alifs to standard Alif
+        val clean2 = clean1.replace("[\u0671أإآ]".toRegex(), "ا")
+        // Remove non-letter characters except whitespace
+        val clean3 = clean2.replace("[^\\p{L}\\s]".toRegex(), "")
+        // Normalize whitespace and return
+        return clean3.replace("\\s+".toRegex(), " ").trim()
+    }
+
     private fun alignWithWhisperX(audioFile: File, text: String): List<WordSegment> {
         val wordSegments = mutableListOf<WordSegment>()
         try {
@@ -1699,10 +1710,11 @@ class VideoGenerator {
                     put("_type", "gradio.FileData")
                 })
             }
+            val cleanTextForWhisper = cleanArabicForWhisper(text)
             val alignPayload = org.json.JSONObject().apply {
                 put("data", org.json.JSONArray().apply {
                     put(fileObject)
-                    put(text)
+                    put(cleanTextForWhisper)
                 })
             }
             
@@ -1725,7 +1737,7 @@ class VideoGenerator {
                 .build()
 
             var attempt = 0
-            while (attempt < 15) {
+            while (attempt < 20) {
                 val eventResponse = client.newCall(eventRequest).execute()
                 if (!eventResponse.isSuccessful) {
                     eventResponse.close()
@@ -1741,6 +1753,13 @@ class VideoGenerator {
                         val nextLine = reader.readLine() ?: ""
                         if (nextLine.startsWith("data: ")) {
                             completedData = nextLine.substring("data: ".length)
+                        }
+                    } else if (currentLine.startsWith("event: error")) {
+                        val nextLine = reader.readLine() ?: ""
+                        if (nextLine.startsWith("data: ")) {
+                            throw Exception("WhisperX stream error: " + nextLine.substring("data: ".length))
+                        } else {
+                            throw Exception("WhisperX Alignment stream failed with error event")
                         }
                     }
                 }
@@ -1779,6 +1798,7 @@ class VideoGenerator {
             }
         } catch (e: Exception) {
             e.printStackTrace()
+            throw e
         }
         return wordSegments
     }
@@ -1875,16 +1895,24 @@ class VideoGenerator {
         if (arabicWords.isEmpty()) {
             return listOf(SmartChunk(arabicText, englishText, 0L, durationMs))
         }
+
+        // Strict Requirement: WhisperX segments must not be empty! Otherwise fail immediately to satisfy user's intent.
+        if (wordSegments.isEmpty()) {
+            throw Exception("فشلت مواءمة الكلمات: لم تقم خدمة WhisperX بإرجاع أي بيانات مزامنة!")
+        }
         
         val englishWords = englishText?.split("\\s+".toRegex())?.filter { it.isNotBlank() } ?: emptyList()
         val adjustedWordSegments = wordSegments.sortedBy { it.startTimeMs }
         
-        val cleanSegs = adjustedWordSegments.map { 
-            it.word.replace("[^\\p{L}]".toRegex(), "") 
+        // Helper function to normalize text for perfect comparison
+        fun normalizeForMatch(w: String): String {
+            val stripped = w.replace("[\u064B-\u065F\u0670\u06D6-\u06ED\u0610-\u061A\u0640]".toRegex(), "")
+            val stripNonLetter = stripped.replace("[^\\p{L}]".toRegex(), "")
+            return stripNonLetter.replace("[\u0671أإآ]".toRegex(), "ا")
         }
-        val cleanArabic = arabicWords.map { 
-            it.replace("[^\\p{L}]".toRegex(), "") 
-        }
+
+        val cleanSegs = adjustedWordSegments.map { normalizeForMatch(it.word) }
+        val cleanArabic = arabicWords.map { normalizeForMatch(it) }
 
         val wordSegMap = mutableMapOf<Int, WordSegment>()
         var sIdx = 0
@@ -1996,8 +2024,47 @@ class VideoGenerator {
         fun getWordTiming(aIdx: Int, fallbackRatio: Float): Pair<Long, Long> {
             val safe = getWordTimingSafe(aIdx)
             if (safe != null) return safe
-            val fallbackTime = (fallbackRatio * durationMs).toLong()
-            return Pair(fallbackTime, fallbackTime)
+            
+            // Linear neighbor interpolation if individual word has no direct timing mapping
+            var prevIdx = aIdx - 1
+            var prevTiming: Pair<Long, Long>? = null
+            while (prevIdx >= 0) {
+                val t = getWordTimingSafe(prevIdx)
+                if (t != null) {
+                    prevTiming = t
+                    break
+                }
+                prevIdx--
+            }
+            
+            var nextIdx = aIdx + 1
+            var nextTiming: Pair<Long, Long>? = null
+            while (nextIdx < totalArabic) {
+                val t = getWordTimingSafe(nextIdx)
+                if (t != null) {
+                    nextTiming = t
+                    break
+                }
+                nextIdx++
+            }
+            
+            if (prevTiming != null && nextTiming != null) {
+                val steps = nextIdx - prevIdx
+                val myStep = aIdx - prevIdx
+                val start = prevTiming.second + (nextTiming.first - prevTiming.second) * myStep / steps
+                val end = start + (nextTiming.first - prevTiming.second) / steps
+                return Pair(start, end)
+            } else if (prevTiming != null) {
+                val start = prevTiming.second + 50L
+                val end = start + 200L
+                return Pair(start, end)
+            } else if (nextTiming != null) {
+                val end = (nextTiming.first - 50L).coerceAtLeast(0L)
+                val start = (end - 200L).coerceAtLeast(0L)
+                return Pair(start, end)
+            }
+            
+            throw Exception("تعذر العثور على أي مواقع مواءمة للكلمة #${aIdx + 1} عبر الذكاء الاصطناعي")
         }
         
         val result = mutableListOf<SmartChunk>()
