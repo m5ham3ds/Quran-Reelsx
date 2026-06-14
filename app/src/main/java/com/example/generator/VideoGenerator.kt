@@ -1824,12 +1824,20 @@ class VideoGenerator {
                             throw Exception(errStr)
                         }
 
-                        val wordsArray = if (firstItem is org.json.JSONObject) {
-                            firstItem.getJSONArray("words")
-                        } else {
-                            dataArray.getJSONArray(0)
+                        var wordsArray: org.json.JSONArray? = null
+                        try {
+                            val obj = dataArray.getJSONObject(0)
+                            if (obj.has("words")) {
+                                wordsArray = obj.getJSONArray("words")
+                            }
+                        } catch(e: Exception) {
+                            // Ignored, might not be a JSONObject
                         }
-                        SystemDiagnosticTracker.addLog("WHISPERX_API", "عدد الكلمات المرجعة من WhisperX: ${wordsArray.length()}")
+                        
+                        if (wordsArray == null) {
+                            wordsArray = dataArray.getJSONArray(0)
+                        }
+                        SystemDiagnosticTracker.addLog("WHISPERX_API", "عدد الكلمات المرجعة من WhisperX: ${wordsArray!!.length()}")
                         for (wIdx in 0 until wordsArray.length()) {
                             val wordObj = wordsArray.getJSONObject(wIdx)
                             val startSec = wordObj.optDouble("start", -1.0)
