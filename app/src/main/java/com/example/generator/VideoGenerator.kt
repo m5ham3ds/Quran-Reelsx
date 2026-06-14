@@ -1692,20 +1692,23 @@ class VideoGenerator {
             val jArray = org.json.JSONArray(uploadResponseBody)
             val remotePath = jArray.getString(0)
 
-            // 2. Call /gradio_api/call/v2/align_audio
-            val alignPayload = org.json.JSONObject().apply {
-                put("audio_file", org.json.JSONObject().apply {
-                    put("path", remotePath)
-                    put("meta", org.json.JSONObject().apply {
-                        put("_type", "gradio.FileData")
-                    })
+            // 2. Call /gradio_api/call/align_audio
+            val fileObject = org.json.JSONObject().apply {
+                put("path", remotePath)
+                put("meta", org.json.JSONObject().apply {
+                    put("_type", "gradio.FileData")
                 })
-                put("text", text)
             }
-
+            val alignPayload = org.json.JSONObject().apply {
+                put("data", org.json.JSONArray().apply {
+                    put(fileObject)
+                    put(text)
+                })
+            }
+            
             val jsonMediaType = "application/json".toMediaTypeOrNull()
             val alignRequest = Request.Builder()
-                .url("https://qalam249-whisperx.hf.space/gradio_api/call/v2/align_audio")
+                .url("https://qalam249-whisperx.hf.space/gradio_api/call/align_audio")
                 .post(alignPayload.toString().toRequestBody(jsonMediaType))
                 .build()
 
