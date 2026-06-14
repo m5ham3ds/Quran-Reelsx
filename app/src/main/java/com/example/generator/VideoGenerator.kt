@@ -1932,10 +1932,9 @@ class VideoGenerator {
                     }
                 }
             }
-            if (!matched && sIdx < cleanSegs.size) {
-                 wordSegMap[aIdx] = adjustedWordSegments[sIdx]
-                 sIdx++
-            }
+            // Strict: Do not update sIdx or greedily mapping if not matched.
+            // This prevents the catastrophic cascading misalignment of later words when a word fails to align.
+            // Instead, the timing of this word will be correctly interpolated relative to its neighbors.
         }
         
         fun getWordTimingSafe(aIdx: Int): Pair<Long, Long>? {
@@ -2064,7 +2063,10 @@ class VideoGenerator {
                 return Pair(start, end)
             }
             
-            throw Exception("تعذر العثور على أي مواقع مواءمة للكلمة #${aIdx + 1} عبر الذكاء الاصطناعي")
+            // Full fallback to avoid crash if WhisperX returned empty words or word-mappings completely failed.
+            val fallbackStart = (fallbackRatio * durationMs).toLong()
+            val fallbackEnd = (fallbackStart + 300L).coerceAtMost(durationMs)
+            return Pair(fallbackStart, fallbackEnd)
         }
         
         val result = mutableListOf<SmartChunk>()
