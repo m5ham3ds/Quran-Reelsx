@@ -91,6 +91,8 @@ class VideoGenerator {
         onComplete: (Uri) -> Unit,
         onError: (String) -> Unit
     ) = withContext(Dispatchers.IO) {
+        SystemDiagnosticTracker.clearLogs()
+        SystemDiagnosticTracker.addLog("PROCESS_START", "بدء تصنيع مقطع الريدز الجديد (Start generate reel). السورة: $surah, البداية: $startAyah, النهاية: $endAyah, القارئ: $reciterId, الترجمة: $showTranslation")
         threadError = null
         var videoCodec: MediaCodec? = null
         var muxer: MediaMuxer? = null
@@ -126,6 +128,7 @@ class VideoGenerator {
             
             // Optional: Prepend Basmalah (بسم الله الرحمن الرحيم) as a separate verse/card
             if (includeBasmalah && surah != 1 && surah != 9) {
+                SystemDiagnosticTracker.addLog("BASMALAH", "تهيئة البسملة المباركة (Basmalah required for surah $surah)")
                 onProgress(if (isArabic) "جاري تهيئة البسملة المباركة..." else "Initializing blessed Basmalah...", 0.02f)
                 try {
                     val basmalahText = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
@@ -135,12 +138,19 @@ class VideoGenerator {
                     val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/1.mp3" // Universal Basmalah is Surah 1 Ayah 1 of the chosen reciter
                     val destFile = File(context.cacheDir, audioFileName)
                     
+                    SystemDiagnosticTracker.addLog("DOWNLOAD", "تحميل صوت البسملة من الرابط: $url")
                     downloadAudio(url, destFile)
+                    SystemDiagnosticTracker.addLog("DOWNLOAD", "تم تحميل صوت البسملة بنجاح، الحجم: ${destFile.length()} بايت")
+                    
+                    SystemDiagnosticTracker.addLog("ALIGNMENT", "بدء مواءمة البسملة مع WhisperX")
                     val alignedSegments = alignWithWhisperX(destFile, basmalahText)
+                    SystemDiagnosticTracker.addLog("ALIGNMENT", "تمت مواءمة البسملة بنجاح، عدد الكلمات: ${alignedSegments.size}")
                     
                     val aacFileName = "${reciterId}_basmalah_transcoded.m4a"
                     val aacFile = File(context.cacheDir, aacFileName)
+                    SystemDiagnosticTracker.addLog("TRANSCODE", "تحويل صيغة صوت البسملة إلى AAC/M4A لضمان توافقية الدمج")
                     val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
+                    SystemDiagnosticTracker.addLog("TRANSCODE", "اكتمل تحويل صوت البسملة بنجاح")
                     
                     val ext = MediaExtractor().apply { setDataSource(aacFile.absolutePath) }
                     ext.selectTrack(0)
@@ -159,7 +169,9 @@ class VideoGenerator {
                     val durationMs = durationUs / 1000
                     val smartChunks = getSmartChunks(context, basmalahText, basmalahTranslation, alignedSegments, durationMs)
                     verses.add(VerseData(basmalahText, basmalahTranslation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
+                    SystemDiagnosticTracker.addLog("BASMALAH", "تم إعداد كارت بطاقة البسملة بنجاح بمدة ${durationMs}ms")
                 } catch (e: Exception) {
+                    SystemDiagnosticTracker.addLog("WARN", "فشلت تهيئة البسملة أو تجاوزناها بسبب خطأ: ${e.message}")
                     e.printStackTrace()
                 }
             }
@@ -167,12 +179,17 @@ class VideoGenerator {
             // 2. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
             for (i in 0 until totalAyahs) {
                 val ayah = startAyah + i
+                SystemDiagnosticTracker.addLog("AYAH_PROCESS", "=== بدء معالجة الآية رقم $ayah من السورة $surah ===")
                 onProgress(if (isArabic) "جاري تحميل الآية $ayah وحفظ مراجع الصوت..." else "Downloading reference audio for Ayah $ayah...", 0.05f + (i * 0.2f / totalAyahs))
                 
+                SystemDiagnosticTracker.addLog("API_CALL", "طلب نص ورقم الآية $ayah بسند عثماني")
                 val verseInfo = fetchVerseInfo(surah, ayah, "quran-uthmani")
                 var text = verseInfo.first
                 val globalAyahNumber = verseInfo.second
-                var translation = if (showTranslation) fetchVerseInfo(surah, ayah, "en.asad").first else null
+                var translation = if (showTranslation) {
+                    SystemDiagnosticTracker.addLog("API_CALL", "طلب ترجمة الآية $ayah بالإنجليزية (Muhammad Asad)")
+                    fetchVerseInfo(surah, ayah, "en.asad").first
+                } else null
 
                 // Strip / Clean prepended Basmalah from Ayah 1 text & translation of any surah (except 1 and 9)
                 if (surah != 1 && surah != 9 && ayah == 1) {
@@ -225,15 +242,21 @@ class VideoGenerator {
                 val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyahNumber.mp3"
                 val destFile = File(context.cacheDir, audioFileName)
                 
+                SystemDiagnosticTracker.addLog("DOWNLOAD", "تحميل تلاوة الآية $ayah من الرابط: $url")
                 downloadAudio(url, destFile)
+                SystemDiagnosticTracker.addLog("DOWNLOAD", "تم تحميل تلاوة الآية $ayah بنجاح، الحجم: ${destFile.length()} بايت")
                 
+                SystemDiagnosticTracker.addLog("ALIGNMENT", "بدء المواءمة بالذكاء الاصطناعي WhisperX للآية $ayah")
                 onProgress(if (isArabic) "جاري مواءمة الكلمات بالذكاء الاصطناعي (WhisperX)..." else "Aligning word timings with WhisperX AI...", 0.07f + (i * 0.2f / totalAyahs))
                 val alignedSegments = alignWithWhisperX(destFile, text)
+                SystemDiagnosticTracker.addLog("ALIGNMENT", "تمت مواءمة الآية $ayah بالكامل بنجاح. عدد الكلمات المسترجعة: ${alignedSegments.size}")
                 
                 onProgress(if (isArabic) "جاري ترميز ملف الصوت بدقة سينمائية..." else "Encoding audio block dynamically...", 0.12f + (i * 0.2f / totalAyahs))
                 val aacFileName = "${reciterId}_${surah}_${ayah}_transcoded.m4a"
                 val aacFile = File(context.cacheDir, aacFileName)
+                SystemDiagnosticTracker.addLog("TRANSCODE", "تحويل ترميز الملف الصوتي للآية $ayah إلى AAC سينمائي")
                 val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
+                SystemDiagnosticTracker.addLog("TRANSCODE", "تم تحويل ترميز ملف الآية $ayah")
                 
                 val ext = MediaExtractor().apply { setDataSource(aacFile.absolutePath) }
                 ext.selectTrack(0)
@@ -250,8 +273,10 @@ class VideoGenerator {
                 ext.release()
                 
                 val durationMs = durationUs / 1000
+                SystemDiagnosticTracker.addLog("CHUNKS", "تقسيم الآية $ayah إلى Smart Chunks للمزامنة البصرية")
                 val smartChunks = getSmartChunks(context, text, translation, alignedSegments, durationMs)
                 verses.add(VerseData(text, translation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
+                SystemDiagnosticTracker.addLog("AYAH_PROCESS", "اكتملت معالجة الآية $ayah بنجاح. المدة الزمنية: ${durationMs}ms، كتل العرض: ${smartChunks.size}")
             }
             
             // 3. Fetch Cinematic Background Portrait Video clip if Pexels or Pixabay API key is provided
@@ -802,12 +827,16 @@ class VideoGenerator {
             
             val finalUri = uri
             if (finalUri != null) {
+                SystemDiagnosticTracker.addLog("PROCESS_SUCCESS", "تم إنتاج وحفظ مقطع الفيديو بنجاح! الرابط: $finalUri")
                 withContext(Dispatchers.Main) { onComplete(finalUri) }
             } else {
-                throw Exception("لم نتمكن من حفظ المقطع في المعرض.")
+                val err = "لم نتمكن من حفظ المقطع في المعرض."
+                SystemDiagnosticTracker.addLog("ERROR", err)
+                throw Exception(err)
             }
             
         } catch (e: Exception) {
+            SystemDiagnosticTracker.addLog("PROCESS_CRASH", "فشل فادح في معالجة الفيديو: ${e.message}")
             e.printStackTrace()
             try {
                 videoCodec?.stop()
@@ -1680,6 +1709,7 @@ class VideoGenerator {
 
     private fun alignWithWhisperX(audioFile: File, text: String): List<WordSegment> {
         val wordSegments = mutableListOf<WordSegment>()
+        SystemDiagnosticTracker.addLog("WHISPERX_API", "بدء رفع الملف الصوتي إلى خوادم WhisperX: ${audioFile.name} (الحجم: ${audioFile.length()})")
         try {
             // 1. Upload audio file to /gradio_api/upload
             val mediaType = "audio/mpeg".toMediaTypeOrNull()
@@ -1698,8 +1728,13 @@ class VideoGenerator {
                 .build()
 
             val uploadResponse = client.newCall(uploadRequest).execute()
-            if (!uploadResponse.isSuccessful) throw Exception("Failed to upload audio to whisperx space")
+            if (!uploadResponse.isSuccessful) {
+                val err = "فشل رفع الملف الصوتي لـ WhisperX. الرمز: ${uploadResponse.code}"
+                SystemDiagnosticTracker.addLog("ERROR", err)
+                throw Exception(err)
+            }
             val uploadResponseBody = uploadResponse.body?.string() ?: throw Exception("Empty upload response")
+            SystemDiagnosticTracker.addLog("WHISPERX_API", "تم الرفع بنجاح. استجابة الرفع: $uploadResponseBody")
             val jArray = org.json.JSONArray(uploadResponseBody)
             val remotePath = jArray.getString(0)
 
@@ -1711,6 +1746,7 @@ class VideoGenerator {
                 })
             }
             val cleanTextForWhisper = cleanArabicForWhisper(text)
+            SystemDiagnosticTracker.addLog("WHISPERX_API", "النص المرسل للمطابقة: [$cleanTextForWhisper]")
             val alignPayload = org.json.JSONObject().apply {
                 put("data", org.json.JSONArray().apply {
                     put(fileObject)
@@ -1725,8 +1761,13 @@ class VideoGenerator {
                 .build()
 
             val alignResponse = client.newCall(alignRequest).execute()
-            if (!alignResponse.isSuccessful) throw Exception("Failed to trigger WhisperX alignment")
+            if (!alignResponse.isSuccessful) {
+                val err = "فشل بدء المطابقة في WhisperX. الرمز: ${alignResponse.code}"
+                SystemDiagnosticTracker.addLog("ERROR", err)
+                throw Exception(err)
+            }
             val alignResponseBody = alignResponse.body?.string() ?: throw Exception("Empty alignment response")
+            SystemDiagnosticTracker.addLog("WHISPERX_API", "استجابة تهيئة المواءمة: $alignResponseBody")
             val eventIdJson = org.json.JSONObject(alignResponseBody)
             val eventId = eventIdJson.getString("event_id")
 
@@ -1736,12 +1777,15 @@ class VideoGenerator {
                 .get()
                 .build()
 
+            SystemDiagnosticTracker.addLog("WHISPERX_API", "بدء جلب وفحص المواءمة بشكل متتالي عبر معرف الحدث: $eventId")
             var attempt = 0
             while (attempt < 20) {
                 val eventResponse = client.newCall(eventRequest).execute()
                 if (!eventResponse.isSuccessful) {
                     eventResponse.close()
-                    throw Exception("Failed to fetch alignment results")
+                    val err = "فشل جلب حدث المواءمة. الرمز: ${eventResponse.code}"
+                    SystemDiagnosticTracker.addLog("ERROR", err)
+                    throw Exception(err)
                 }
                 val responseBody = eventResponse.body ?: throw Exception("Empty response body from alignment stream")
                 val reader = responseBody.charStream().buffered()
@@ -1757,23 +1801,31 @@ class VideoGenerator {
                     } else if (currentLine.startsWith("event: error")) {
                         val nextLine = reader.readLine() ?: ""
                         if (nextLine.startsWith("data: ")) {
-                            throw Exception("WhisperX stream error: " + nextLine.substring("data: ".length))
+                            val errStr = "حدث خطأ في خادم WhisperX: " + nextLine.substring("data: ".length)
+                            SystemDiagnosticTracker.addLog("ERROR", errStr)
+                            throw Exception(errStr)
                         } else {
-                            throw Exception("WhisperX Alignment stream failed with error event")
+                            val errStr = "فشل مجرى المواءمة لـ WhisperX بسبب حدث خطأ"
+                            SystemDiagnosticTracker.addLog("ERROR", errStr)
+                            throw Exception(errStr)
                         }
                     }
                 }
                 eventResponse.close()
 
                 if (completedData != null) {
+                    SystemDiagnosticTracker.addLog("WHISPERX_API", "اكتمل التدفق بنجاح. جاري تحليل البيانات المسترجعة...")
                     val dataArray = org.json.JSONArray(completedData)
                     if (dataArray.length() > 0) {
                         val firstItem = dataArray.get(0)
                         if (firstItem is org.json.JSONObject && firstItem.has("error")) {
-                            throw Exception("WhisperX Alignment error: " + firstItem.getString("error"))
+                            val errStr = "استجابة خطأ بصيغة JSON من WhisperX: " + firstItem.getString("error")
+                            SystemDiagnosticTracker.addLog("ERROR", errStr)
+                            throw Exception(errStr)
                         }
 
                         val wordsArray = dataArray.getJSONArray(0)
+                        SystemDiagnosticTracker.addLog("WHISPERX_API", "عدد الكلمات المرجعة من WhisperX: ${wordsArray.length()}")
                         for (wIdx in 0 until wordsArray.length()) {
                             val wordObj = wordsArray.getJSONObject(wIdx)
                             val startSec = wordObj.optDouble("start", -1.0)
@@ -1794,9 +1846,11 @@ class VideoGenerator {
                     break
                 }
                 attempt++
+                SystemDiagnosticTracker.addLog("WHISPERX_API", "المحاولة #$attempt: معالجة قائمة الانتظار لـ WhisperX...")
                 Thread.sleep(1000)
             }
         } catch (e: Exception) {
+            SystemDiagnosticTracker.addLog("ERROR", "خطأ فادح أثناء مزامنة WhisperX للآية: ${e.message}")
             e.printStackTrace()
             throw e
         }

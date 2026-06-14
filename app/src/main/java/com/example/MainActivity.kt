@@ -397,6 +397,9 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
     val recitersList by viewModel.reciters.collectAsState()
     val isGenerationPaused by viewModel.isGenerationPausedFlow.collectAsState()
     var showCancelConfirmationDialog by remember { mutableStateOf(false) }
+    var showDiagnosticDialog by remember { mutableStateOf(false) }
+    var diagnosticReportText by remember { mutableStateOf("") }
+    var isRunningAudit by remember { mutableStateOf(false) }
 
     var selectedSurahIdx by remember { mutableIntStateOf(0) }
     var startAyahText by remember { mutableStateOf("1") }
@@ -924,6 +927,30 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                         )
                                     }
                                 }
+
+                                Button(
+                                    onClick = {
+                                        isRunningAudit = true
+                                        showDiagnosticDialog = true
+                                        scope.launch {
+                                            val report = com.example.generator.SystemDiagnosticTracker.runFullSystemAudit(context)
+                                            diagnosticReportText = report
+                                            isRunningAudit = false
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0x22F44336), contentColor = Color(0xFFFF8A80)),
+                                    border = BorderStroke(1.dp, Color(0x33F44336)),
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Filled.Info, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (isArabic) "تشغيل الفحص والتشخيص الشامل للمشكلة 🔍" else "Run Comprehensive System Diagnostics 🔍",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                }
                             }
                             is ReelState.Loading -> {
                                 val loadingState = state as ReelState.Loading
@@ -1077,7 +1104,45 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                         .height(280.dp)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(Color.Black)
+                                        .clickable {
+                                            isRunningAudit = true
+                                            showDiagnosticDialog = true
+                                            scope.launch {
+                                                val report = com.example.generator.SystemDiagnosticTracker.runFullSystemAudit(context)
+                                                diagnosticReportText = report
+                                                isRunningAudit = false
+                                            }
+                                        }
                                 )
+
+                                Button(
+                                    onClick = {
+                                        isRunningAudit = true
+                                        showDiagnosticDialog = true
+                                        scope.launch {
+                                            val report = com.example.generator.SystemDiagnosticTracker.runFullSystemAudit(context)
+                                            diagnosticReportText = report
+                                            isRunningAudit = false
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E1711), contentColor = LuxuryGold),
+                                    border = BorderStroke(1.dp, LuxuryGold.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Info,
+                                        contentDescription = null,
+                                        tint = LuxuryGold,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (isArabic) "فحص وتشخيص فوري لهذا المقطع (سير العملية بل كامل) 🔍" else "Run Deep Video Diagnostic Audit 🔍",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 12.sp
+                                    )
+                                }
 
                                 // Insert Gemini Social Media Metadata Section
                                 generatedMeta?.let { meta ->
@@ -1122,6 +1187,32 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                 }
             }
         }
+    }
+
+    if (showDiagnosticDialog) {
+        DiagnosticReportDialog(
+            reportText = diagnosticReportText,
+            isRunning = isRunningAudit,
+            isArabic = isArabic,
+            onDismiss = { showDiagnosticDialog = false },
+            onSaveReport = {
+                val path = com.example.generator.SystemDiagnosticTracker.saveReportToFilesAndGetPath(context, diagnosticReportText)
+                Toast.makeText(context, if (isArabic) "تم حفظ ملف التقرير بنجاح في:\n$path" else "Report saved successfully at:\n$path", Toast.LENGTH_LONG).show()
+            },
+            onCopyReport = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("System Diagnostic Report", diagnosticReportText)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(context, if (isArabic) "تم نسخ نص التقرير بالكامل!" else "Full report copied to clipboard!", Toast.LENGTH_SHORT).show()
+            },
+            onShareReport = {
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, diagnosticReportText)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, if (isArabic) "مشاركة تقرير النظام" else "Share System Report"))
+            }
+        )
     }
 }
 
@@ -2093,4 +2184,140 @@ fun PlatformMetaPreviewCard(
             )
         }
     }
+}
+
+@Composable
+fun DiagnosticReportDialog(
+    reportText: String,
+    isRunning: Boolean,
+    isArabic: Boolean,
+    onDismiss: () -> Unit,
+    onSaveReport: () -> Unit,
+    onCopyReport: () -> Unit,
+    onShareReport: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Info,
+                    contentDescription = null,
+                    tint = LuxuryGold
+                )
+                Text(
+                    text = if (isArabic) "تقرير التشخيص وفحص النظام الشامل" else "System Diagnostic & Audit Report",
+                    color = SoftGold,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .background(Color(0xFF0F1218), RoundedCornerShape(12.dp))
+                    .border(1.dp, BorderColor, RoundedCornerShape(12.dp))
+                    .padding(12.dp)
+            ) {
+                if (isRunning) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        CircularProgressIndicator(color = LuxuryGold)
+                        Text(
+                            text = if (isArabic) "جاري تشغيل وفحص كافة عناصر وخوادم النظام..." else "Analyzing all system servers, files and configs...",
+                            color = TextSoftColor,
+                            fontSize = 14.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    val scrollState = rememberScrollState()
+                    Column(
+                        modifier = Modifier.verticalScroll(scrollState)
+                    ) {
+                        Text(
+                            text = reportText,
+                            color = Color(0xFFE0E6ED),
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (!isRunning) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = onSaveReport,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(if (isArabic) "حفظ كملف txt 💾" else "Save to txt 💾", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        
+                        Button(
+                            onClick = onCopyReport,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = BorderColor, contentColor = TextSoftColor),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(if (isArabic) "نسخ النص 📋" else "Copy Code 📋", fontSize = 12.sp)
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = onShareReport,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = BorderColor, contentColor = TextSoftColor),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(if (isArabic) "مشاركة التقرير 📤" else "Share Report 📤", fontSize = 12.sp)
+                        }
+                        Button(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(if (isArabic) "إغلاق" else "Close", fontSize = 12.sp)
+                        }
+                    }
+                } else {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.White),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(if (isArabic) "إلغاء الفحص" else "Cancel", fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        containerColor = ScreenBg,
+        shape = RoundedCornerShape(16.dp)
+    )
 }
