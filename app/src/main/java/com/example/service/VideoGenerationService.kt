@@ -71,6 +71,7 @@ class VideoGenerationService : Service() {
         val reciterId = intent.getStringExtra("reciterId") ?: "ar.alafasy"
         val showTranslation = intent.getBooleanExtra("showTranslation", true)
         val pexelsApiKey = intent.getStringExtra("pexelsApiKey") ?: ""
+        val videoQuality = intent.getStringExtra("videoQuality") ?: "Ultra"
         val isRetry = intent.getBooleanExtra("isRetry", false)
 
         scope.launch {
@@ -101,6 +102,7 @@ class VideoGenerationService : Service() {
                     reciterId = reciterId,
                     showTranslation = showTranslation,
                     pexelsApiKey = pexelsApiKey,
+                    videoQuality = videoQuality,
                     isRetry = isRetry,
                     includeBasmalah = includeBasmalah,
                     onProgress = { msg, progress ->

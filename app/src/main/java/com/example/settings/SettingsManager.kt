@@ -35,6 +35,9 @@ class SettingsManager(private val context: Context) {
         val TRANSLATION_COLOR = stringPreferencesKey("translation_color")
         val TRANSLATION_FONT_FAMILY = stringPreferencesKey("translation_font_family")
 
+        // Download Video Quality
+        val VIDEO_QUALITY = stringPreferencesKey("video_quality") // "Normal", "High", "Ultra"
+
         // Gemini & Social accounts keys
         val GEMINI_API_KEY = stringPreferencesKey("gemini_api_key")
         val TIKTOK_LINKED = booleanPreferencesKey("tiktok_linked")
@@ -87,6 +90,7 @@ class SettingsManager(private val context: Context) {
     val themeMode: Flow<Boolean> = context.dataStore.data.map { it[THEME_DARK_MODE] ?: true } // default dark mode for cinematic feel
     val showTranslation: Flow<Boolean> = context.dataStore.data.map { it[SHOW_TRANSLATION] ?: true }
     val language: Flow<String> = context.dataStore.data.map { it[LANGUAGE] ?: "ar" }
+    val videoQuality: Flow<String> = context.dataStore.data.map { it[VIDEO_QUALITY] ?: "Ultra" }
 
     // Font formatting flows
     val fontFamily: Flow<String> = context.dataStore.data.map { it[FONT_FAMILY] ?: "Amiri" }
@@ -170,6 +174,10 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setLanguage(lang: String) {
         context.dataStore.edit { it[LANGUAGE] = lang }
+    }
+
+    suspend fun setVideoQuality(value: String) {
+        context.dataStore.edit { it[VIDEO_QUALITY] = value }
     }
 
     // Font formatting setters

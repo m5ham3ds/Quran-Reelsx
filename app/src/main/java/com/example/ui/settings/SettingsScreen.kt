@@ -45,23 +45,20 @@ fun SettingsScreen(
     val isDark by settingsManager.themeMode.collectAsState(initial = true)
     val showTrans by settingsManager.showTranslation.collectAsState(initial = true)
     val language by settingsManager.language.collectAsState(initial = "ar")
-    val fontFamily by settingsManager.fontFamily.collectAsState(initial = "Amiri")
-    val translationFontFamily by settingsManager.translationFontFamily.collectAsState(initial = "Montserrat")
+    val videoQuality by settingsManager.videoQuality.collectAsState(initial = "Ultra")
 
     val isArabic = language == "ar"
 
-    // Premium Celestial Dark Gradient Base (Midnight Charcoal to Deep Spiritual Emerald)
-    val backgroundBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color(0xFF0F0F14), // Midnight Charcoal
-            Color(0xFF12201D)  // Deep Spiritual Emerald
-        )
-    )
+    // App Colors matching MainActivity
+    val ScreenBg = Color(0xFF0F0F12)
+    val CardBg = Color(0xFF18181D)
+    val LuxuryGold = Color(0xFFD29E57)
+    val TextMutedColor = Color(0xFF9E9EA5)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundBrush)
+            .background(ScreenBg)
     ) {
         Scaffold(
             containerColor = Color.Transparent,
@@ -104,7 +101,7 @@ fun SettingsScreen(
                 // Section 1: Appearance and Language Card
                 Text(
                     text = if (isArabic) "المظهر واللغة" else "Appearance & Language",
-                    color = Color(0xFF81C784), // Golden-Emerald Green Accent
+                    color = LuxuryGold, 
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                     letterSpacing = 0.5.sp,
@@ -113,7 +110,7 @@ fun SettingsScreen(
 
                 Surface(
                     shape = RoundedCornerShape(24.dp),
-                    color = Color(0x1AFFFFFF), // Transparent Glassmorphism layer
+                    color = CardBg, 
                     border = BorderStroke(1.dp, Color(0x15FFFFFF)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -128,14 +125,14 @@ fun SettingsScreen(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color(0x3381C784),
+                                color = LuxuryGold.copy(alpha=0.2f),
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Palette,
                                         contentDescription = null,
-                                        tint = Color(0xFF81C784)
+                                        tint = LuxuryGold
                                     )
                                 }
                             }
@@ -149,7 +146,7 @@ fun SettingsScreen(
                                 )
                                 Text(
                                     text = if (isArabic) "مريح للعين وخيار مثالي للتطوير" else "Comfortable dark palette layout",
-                                    color = Color(0xFFB0BEC5),
+                                    color = TextMutedColor,
                                     fontSize = 12.sp
                                 )
                             }
@@ -157,8 +154,8 @@ fun SettingsScreen(
                                 checked = isDark,
                                 onCheckedChange = { scope.launch { settingsManager.setThemeMode(it) } },
                                 colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color(0xFF81C784),
-                                    checkedTrackColor = Color(0x6681C784)
+                                    checkedThumbColor = LuxuryGold,
+                                    checkedTrackColor = LuxuryGold.copy(alpha=0.4f)
                                 )
                             )
                         }
@@ -172,14 +169,14 @@ fun SettingsScreen(
                         ) {
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = Color(0x3364B5F6),
+                                color = LuxuryGold.copy(alpha=0.2f),
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = Icons.Default.Visibility,
                                         contentDescription = null,
-                                        tint = Color(0xFF64B5F6)
+                                        tint = LuxuryGold
                                     )
                                 }
                             }
@@ -193,7 +190,7 @@ fun SettingsScreen(
                                 )
                                 Text(
                                     text = if (isArabic) "عرض الترجمة الأجنبية تحت الآية" else "Append translated verses to screen",
-                                    color = Color(0xFFB0BEC5),
+                                    color = TextMutedColor,
                                     fontSize = 12.sp
                                 )
                             }
@@ -201,8 +198,8 @@ fun SettingsScreen(
                                 checked = showTrans,
                                 onCheckedChange = { scope.launch { settingsManager.setShowTranslation(it) } },
                                 colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color(0xFF64B5F6),
-                                    checkedTrackColor = Color(0x6664B5F6)
+                                    checkedThumbColor = LuxuryGold,
+                                    checkedTrackColor = LuxuryGold.copy(alpha=0.4f)
                                 )
                             )
                         }
@@ -221,51 +218,125 @@ fun SettingsScreen(
                             var langExpanded by remember { mutableStateOf(false) }
                             Box(modifier = Modifier.fillMaxWidth()) {
                                 Surface(
-                                    onClick = { langExpanded = true },
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = Color(0x14FFFFFF),
-                                    border = BorderStroke(1.dp, Color(0x2BFFFFFF)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = if (isArabic) "العربية" else "English",
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Icon(
-                                            imageVector = Icons.Default.Language,
-                                            contentDescription = null,
-                                            tint = Color(0xFFCFD8DC)
-                                        )
-                                    }
-                                }
-
-                                DropdownMenu(
-                                    expanded = langExpanded,
-                                    onDismissRequest = { langExpanded = false },
+                                onClick = { langExpanded = true },
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0x14FFFFFF),
+                                border = BorderStroke(1.dp, Color(0x2BFFFFFF)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.85f)
-                                        .background(Color(0xFF1E2F2C))
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    DropdownMenuItem(
-                                        text = { Text("اللغة العربية", color = Color.White, fontWeight = FontWeight.Bold) },
-                                        onClick = {
-                                            scope.launch { settingsManager.setLanguage("ar") }
-                                            langExpanded = false
-                                        }
+                                    Text(
+                                        text = if (language == "ar") "العربية" else "English",
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium
                                     )
+                                    Icon(
+                                        imageVector = Icons.Default.Language,
+                                        contentDescription = null,
+                                        tint = Color(0xFFCFD8DC)
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = langExpanded,
+                                onDismissRequest = { langExpanded = false },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .background(CardBg)
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("اللغة العربية", color = Color.White, fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        scope.launch { settingsManager.setLanguage("ar") }
+                                        langExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("English Language", color = Color.White, fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        scope.launch { settingsManager.setLanguage("en") }
+                                        langExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = Color(0x15FFFFFF))
+
+                    // Video Quality Dropdown
+                    Column {
+                        Text(
+                            text = if (isArabic) "جودة المشاهد السينمائية" else "Video Library Quality",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        var qualityExpanded by remember { mutableStateOf(false) }
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            Surface(
+                                onClick = { qualityExpanded = true },
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0x14FFFFFF),
+                                border = BorderStroke(1.dp, Color(0x2BFFFFFF)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = when(videoQuality) {
+                                            "Normal" -> if (isArabic) "عادية" else "Normal"
+                                            "High" -> if (isArabic) "عالية" else "High"
+                                            else -> if (isArabic) "عالية جدآ" else "Ultra"
+                                        },
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.Info, // Generic icon
+                                        contentDescription = null,
+                                        tint = Color(0xFFCFD8DC)
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = qualityExpanded,
+                                onDismissRequest = { qualityExpanded = false },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.85f)
+                                    .background(CardBg)
+                            ) {
+                                val options = listOf("Normal", "High", "Ultra")
+                                options.forEach { option ->
                                     DropdownMenuItem(
-                                        text = { Text("English Language", color = Color.White, fontWeight = FontWeight.Bold) },
+                                        text = { 
+                                            Text(
+                                                when(option) {
+                                                    "Normal" -> if (isArabic) "عادية" else "Normal"
+                                                    "High" -> if (isArabic) "عالية" else "High"
+                                                    else -> if (isArabic) "عالية جدآ" else "Ultra"
+                                                },
+                                                color = Color.White, 
+                                                fontWeight = FontWeight.Bold
+                                            ) 
+                                        },
                                         onClick = {
-                                            scope.launch { settingsManager.setLanguage("en") }
-                                            langExpanded = false
+                                            scope.launch { settingsManager.setVideoQuality(option) }
+                                            qualityExpanded = false
                                         }
                                     )
                                 }
@@ -273,23 +344,24 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
 
-                // Section 2: API Keys and Video Backdrop config
-                Text(
-                    text = if (isArabic) "مصادر ومفاتيح الـ API" else "Integration & API Configuration",
-                    color = Color(0xFF64B5F6),
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    letterSpacing = 0.5.sp,
-                    modifier = Modifier.padding(start = 4.dp, top = 8.dp)
-                )
+            // Section 2: API Keys and Video Backdrop config
+            Text(
+                text = if (isArabic) "مصادر ومفاتيح الـ API" else "Integration & API Configuration",
+                color = LuxuryGold,
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp)
+            )
 
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color(0x1AFFFFFF),
-                    border = BorderStroke(1.dp, Color(0x15FFFFFF)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = CardBg,
+                border = BorderStroke(1.dp, Color(0x15FFFFFF)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                     Column(
                         modifier = Modifier.padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -328,7 +400,7 @@ fun SettingsScreen(
                                 }
                                 Text(
                                     text = if (isArabic) "احصل على مفتاح Pexels" else "Get free Pexels key",
-                                    color = Color(0xFF64B5F6),
+                                    color = LuxuryGold,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     modifier = Modifier
@@ -345,7 +417,7 @@ fun SettingsScreen(
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.White,
                                     unfocusedTextColor = Color.White,
-                                    focusedBorderColor = Color(0xFF64B5F6),
+                                    focusedBorderColor = LuxuryGold,
                                     unfocusedBorderColor = Color(0x33FFFFFF),
                                     focusedContainerColor = Color(0x0FFFFFFF),
                                     unfocusedContainerColor = Color(0x05FFFFFF)
@@ -370,7 +442,7 @@ fun SettingsScreen(
                                 }
                                 Text(
                                     text = if (isArabic) "احصل على مفتاح Pixabay" else "Get free Pixabay key",
-                                    color = Color(0xFF64B5F6),
+                                    color = LuxuryGold,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     modifier = Modifier
@@ -387,7 +459,7 @@ fun SettingsScreen(
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.White,
                                     unfocusedTextColor = Color.White,
-                                    focusedBorderColor = Color(0xFF64B5F6),
+                                    focusedBorderColor = LuxuryGold,
                                     unfocusedBorderColor = Color(0x33FFFFFF),
                                     focusedContainerColor = Color(0x0FFFFFFF),
                                     unfocusedContainerColor = Color(0x05FFFFFF)
@@ -412,7 +484,7 @@ fun SettingsScreen(
                                 }
                                 Text(
                                     text = if (isArabic) "احصل على مفتاح Gemini مجاناً" else "Get free Gemini key",
-                                    color = Color(0xFF81C784),
+                                    color = LuxuryGold,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
                                     modifier = Modifier
@@ -422,7 +494,7 @@ fun SettingsScreen(
                             }
                             Text(
                                 text = if (isArabic) "مطلوب لتوليد العناوين والوصف والهاشتاجات الذكية لكل منصة بشكل احترافي" else "Required to generate smart platform-specific titles, descriptions, and tags automatically",
-                                color = Color(0xFFB0BEC5),
+                                color = TextMutedColor,
                                 fontSize = 11.sp,
                                 lineHeight = 15.sp,
                                 modifier = Modifier.padding(bottom = 2.dp)
@@ -436,7 +508,7 @@ fun SettingsScreen(
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.White,
                                     unfocusedTextColor = Color.White,
-                                    focusedBorderColor = Color(0xFF81C784),
+                                    focusedBorderColor = LuxuryGold,
                                     unfocusedBorderColor = Color(0x33FFFFFF),
                                     focusedContainerColor = Color(0x0FFFFFFF),
                                     unfocusedContainerColor = Color(0x05FFFFFF)

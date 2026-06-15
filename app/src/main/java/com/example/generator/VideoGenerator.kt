@@ -141,6 +141,7 @@ class VideoGenerator {
         reciterId: String,
         showTranslation: Boolean,
         pexelsApiKey: String,
+        videoQuality: String = "Ultra",
         isRetry: Boolean = false,
         includeBasmalah: Boolean = true,
         onProgress: (String, Float) -> Unit,
@@ -424,37 +425,37 @@ class VideoGenerator {
                                     
                                     val videoFiles = selectedVideoJson.getJSONArray("video_files")
                                     var highestResUrl: String? = null
-                                    var highestRes = 0
                                     
-                                    for (v in 0 until videoFiles.length()) {
-                                        val fileObj = videoFiles.getJSONObject(v)
-                                        val link = fileObj.getString("link")
-                                        val width = fileObj.optInt("width", 0)
-                                        val height = fileObj.optInt("height", 0)
-                                        val res = width * height
-                                        if (width < height && link.contains("mp4", ignoreCase = true)) {
-                                            if (res > highestRes || highestResUrl == null) {
-                                                highestResUrl = link
-                                                highestRes = res
-                                            }
+                                    val mp4Files = mutableListOf<JSONObject>()
+                                    for(v in 0 until videoFiles.length()) {
+                                        val f = videoFiles.getJSONObject(v)
+                                        if (f.getString("link").contains("mp4", ignoreCase = true)) {
+                                            mp4Files.add(f)
                                         }
                                     }
-                                    if (highestResUrl == null && videoFiles.length() > 0) {
-                                        for (v in 0 until videoFiles.length()) {
-                                            val fileObj = videoFiles.getJSONObject(v)
-                                            val link = fileObj.getString("link")
-                                            val width = fileObj.optInt("width", 0)
-                                            val height = fileObj.optInt("height", 0)
-                                            val res = width * height
-                                            if (link.contains("mp4", ignoreCase = true)) {
-                                                if (res > highestRes || highestResUrl == null) {
-                                                    highestResUrl = link
-                                                    highestRes = res
-                                                }
+                                    
+                                    val portraitFiles = mp4Files.filter { it.optInt("width", 0) < it.optInt("height", 0) }
+                                    val targetList = if(portraitFiles.isNotEmpty()) portraitFiles else mp4Files
+                                    
+                                    if (targetList.isNotEmpty()) {
+                                        val sortedFiles = targetList.sortedBy { it.optInt("width", 0) * it.optInt("height", 0) }
+                                        highestResUrl = when(videoQuality) {
+                                            "Normal" -> {
+                                                // Try to pick a medium-low one, bounded so it's not absolutely terrible.
+                                                val idx = (sortedFiles.size * 0.25).toInt()
+                                                sortedFiles[idx.coerceAtMost(sortedFiles.lastIndex)].getString("link")
+                                            }
+                                            "High" -> {
+                                                // Try to pick a medium-high one.
+                                                val idx = (sortedFiles.size * 0.6).toInt()
+                                                sortedFiles[idx.coerceAtMost(sortedFiles.lastIndex)].getString("link")
+                                            }
+                                            else -> {
+                                                // "Ultra" - Maximum resolution
+                                                sortedFiles.last().getString("link")
                                             }
                                         }
-                                    }
-                                    if (highestResUrl == null && videoFiles.length() > 0) {
+                                    } else if (videoFiles.length() > 0) {
                                         highestResUrl = videoFiles.getJSONObject(0).getString("link")
                                     }
                                     
@@ -527,7 +528,11 @@ class VideoGenerator {
                                     }
                                     
                                     val videosObj = selectedHit.getJSONObject("videos")
-                                    val sizeKeys = listOf("medium", "small", "large", "tiny")
+                                    val sizeKeys = when (videoQuality) {
+                                        "Normal" -> listOf("small", "tiny", "medium", "large")
+                                        "High" -> listOf("medium", "small", "large", "tiny")
+                                        else -> listOf("large", "medium", "small", "tiny")
+                                    }
                                     var selectedVideoUrl: String? = null
                                     for (key in sizeKeys) {
                                         if (videosObj.has(key)) {

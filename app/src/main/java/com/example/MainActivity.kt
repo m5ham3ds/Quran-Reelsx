@@ -1353,29 +1353,29 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                         }
                     }
 
-                    // Font Size Buttons (A- and A+)
-                    Text(if (isArabic) "حجم النص" else "Text Size", color = TextMutedColor, fontSize = 13.sp)
+                    // Font Size Slider
+                    Text(if (isArabic) "حجم النص ($fontSize px)" else "Text Size ($fontSize px)", color = TextMutedColor, fontSize = 13.sp)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(ScreenBg, RoundedCornerShape(12.dp))
-                            .padding(12.dp)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        TextButton(
-                            onClick = { scope.launch { settingsManager.setFontSize((fontSize - 2).coerceAtLeast(1)) } }
-                        ) {
-                            Text("A-", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        }
-                        
-                        Text("${fontSize}px", color = TextSoftColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        
-                        TextButton(
-                            onClick = { scope.launch { settingsManager.setFontSize((fontSize + 2).coerceAtMost(100)) } }
-                        ) {
-                            Text("A+", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        }
+                        Text("1", color = TextMutedColor, fontSize = 12.sp)
+                        Slider(
+                            value = fontSize.toFloat(),
+                            onValueChange = { scope.launch { settingsManager.setFontSize(it.toInt()) } },
+                            valueRange = 1f..100f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = LuxuryGold,
+                                activeTrackColor = LuxuryGold.copy(alpha = 0.7f),
+                                inactiveTrackColor = LuxuryGold.copy(alpha = 0.2f)
+                            ),
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                        )
+                        Text("100", color = TextMutedColor, fontSize = 12.sp)
                     }
                 }
             }
@@ -1724,22 +1724,28 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                     }
 
                     // Translation Text Size
-                    Text(if (isArabic) "حجم خط الترجمة" else "Subtitles Font Size", color = TextMutedColor, fontSize = 13.sp)
+                    Text(if (isArabic) "حجم خط الترجمة ($translationFontSize px)" else "Subtitles Font Size ($translationFontSize px)", color = TextMutedColor, fontSize = 13.sp)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(ScreenBg, RoundedCornerShape(12.dp))
-                            .padding(12.dp)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize - 2).coerceAtLeast(1)) } }) {
-                            Text("A-", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
-                        Text("${translationFontSize}px", color = TextSoftColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize + 2).coerceAtMost(100)) } }) {
-                            Text("A+", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        }
+                        Text("1", color = TextMutedColor, fontSize = 12.sp)
+                        Slider(
+                            value = translationFontSize.toFloat(),
+                            onValueChange = { scope.launch { settingsManager.setTranslationFontSize(it.toInt()) } },
+                            valueRange = 1f..100f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = LuxuryGold,
+                                activeTrackColor = LuxuryGold.copy(alpha = 0.7f),
+                                inactiveTrackColor = LuxuryGold.copy(alpha = 0.2f)
+                            ),
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                        )
+                        Text("100", color = TextMutedColor, fontSize = 12.sp)
                     }
 
                     // Translation Color presets

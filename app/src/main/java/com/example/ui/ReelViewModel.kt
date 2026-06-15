@@ -428,6 +428,7 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
             val settingsManager = com.example.settings.SettingsManager(context)
             val showTranslation = settingsManager.showTranslation.first()
             val pexelsApiKey = settingsManager.pexelsApiKey.first()
+            val videoQuality = settingsManager.videoQuality.first()
             
             val intent = Intent(context, VideoGenerationService::class.java).apply {
                 putExtra("surah", surah)
@@ -436,6 +437,7 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                 putExtra("reciterId", reciterId)
                 putExtra("showTranslation", showTranslation)
                 putExtra("pexelsApiKey", pexelsApiKey)
+                putExtra("videoQuality", videoQuality)
                 putExtra("isRetry", isRetry)
             }
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
