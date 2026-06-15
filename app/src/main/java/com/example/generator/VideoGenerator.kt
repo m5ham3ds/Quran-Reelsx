@@ -954,9 +954,25 @@ class VideoGenerator {
     private fun fetchVerseInfo(surah: Int, ayah: Int, edition: String): Triple<String, Int, String> {
         val url = "https://api.alquran.cloud/v1/ayah/$surah:$ayah/$edition"
         val request = Request.Builder().url(url).build()
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) throw Exception("فشل تحميل نصوص الآيات من الخادم")
-        val body = response.body?.string() ?: ""
+        var body = ""
+        var retries = 0
+        while (retries < 3) {
+            try {
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    retries++
+                    Thread.sleep(2000)
+                    continue
+                }
+                body = response.body?.string() ?: ""
+                break
+            } catch (e: Exception) {
+                retries++
+                if (retries >= 3) throw e
+                Thread.sleep(2000)
+            }
+        }
+        if (body.isEmpty()) throw Exception("فشل تحميل نصوص الآيات من الخادم")
         val json = JSONObject(body)
         val data = json.getJSONObject("data")
         val surahObj = data.getJSONObject("surah")
@@ -970,11 +986,25 @@ class VideoGenerator {
             .url(url)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Android VideoGenerator")
             .build()
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) throw Exception("فشل تحميل الملفات الصوتية المحددة")
-        response.body?.byteStream()?.use { input ->
-            destFile.outputStream().use { output ->
-                input.copyTo(output)
+        var retries = 0
+        while (retries < 3) {
+            try {
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    retries++
+                    Thread.sleep(3000)
+                    continue
+                }
+                response.body?.byteStream()?.use { input ->
+                    destFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                break
+            } catch (e: Exception) {
+                retries++
+                if (retries >= 3) throw Exception("فشل تحميل الملفات من الخادم بعد ٣ محاولات: ${e.message}")
+                Thread.sleep(3000)
             }
         }
     }

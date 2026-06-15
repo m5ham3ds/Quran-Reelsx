@@ -257,6 +257,31 @@ fun SettingsScreen(
 
                         HorizontalDivider(color = Color(0x15FFFFFF))
 
+                        // Primary Font Size picker
+                        val currentFontSize by settingsManager.fontSize.collectAsState(initial = 50)
+                        Column {
+                            Text(
+                                text = if (isArabic) "حجم خط الآيات: $currentFontSize px" else "Quranic Font Size: $currentFontSize px",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            Slider(
+                                value = currentFontSize.toFloat(),
+                                onValueChange = { scope.launch { settingsManager.setFontSize(it.toInt()) } },
+                                valueRange = 1f..100f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFFCFD8DC),
+                                    activeTrackColor = Color(0xFF81C784),
+                                    inactiveTrackColor = Color(0x33FFFFFF)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        HorizontalDivider(color = Color(0x15FFFFFF))
+
                         // Translation Font Family picker
                         Column {
                             Text(
@@ -301,6 +326,31 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+                        }
+
+                        HorizontalDivider(color = Color(0x15FFFFFF))
+
+                        // Translation Font Size picker
+                        val currentTransFontSize by settingsManager.translationFontSize.collectAsState(initial = 25)
+                        Column {
+                            Text(
+                                text = if (isArabic) "حجم خط الترجمة: $currentTransFontSize px" else "Translation Font Size: $currentTransFontSize px",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            Slider(
+                                value = currentTransFontSize.toFloat(),
+                                onValueChange = { scope.launch { settingsManager.setTranslationFontSize(it.toInt()) } },
+                                valueRange = 1f..100f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color(0xFFCFD8DC),
+                                    activeTrackColor = Color(0xFF81C784),
+                                    inactiveTrackColor = Color(0x33FFFFFF)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
 
                         HorizontalDivider(color = Color(0x15FFFFFF))
