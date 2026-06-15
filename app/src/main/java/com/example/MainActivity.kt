@@ -1340,34 +1340,16 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                             expanded = fontTypeExpanded,
                             onDismissRequest = { fontTypeExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text(if (isArabic) "Amiri (أميري)" else "Amiri Thread", color = TextSoftColor) },
-                                onClick = {
-                                    scope.launch { settingsManager.setFontFamily("Amiri") }
-                                    fontTypeExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (isArabic) "Cairo (كايرو)" else "Cairo Flat", color = TextSoftColor) },
-                                onClick = {
-                                    scope.launch { settingsManager.setFontFamily("Cairo") }
-                                    fontTypeExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (isArabic) "الخط القياسي (Default)" else "Standard Bold", color = TextSoftColor) },
-                                onClick = {
-                                    scope.launch { settingsManager.setFontFamily("Default") }
-                                    fontTypeExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (isArabic) "Monospace (ثابت العرض)" else "Monopoise Elegant", color = TextSoftColor) },
-                                onClick = {
-                                    scope.launch { settingsManager.setFontFamily("Monospace") }
-                                    fontTypeExpanded = false
-                                }
-                            )
+                            val arabicFonts = listOf("Amiri", "Cairo", "Scheherazade New", "Lateef", "Reem Kufi")
+                            arabicFonts.forEach { font ->
+                                DropdownMenuItem(
+                                    text = { Text(font, color = TextSoftColor) },
+                                    onClick = {
+                                        scope.launch { settingsManager.setFontFamily(font) }
+                                        fontTypeExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -1382,7 +1364,7 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                             .padding(12.dp)
                     ) {
                         TextButton(
-                            onClick = { scope.launch { settingsManager.setFontSize((fontSize - 2).coerceAtLeast(20)) } }
+                            onClick = { scope.launch { settingsManager.setFontSize((fontSize - 2).coerceAtLeast(1)) } }
                         ) {
                             Text("A-", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 18.sp)
                         }
@@ -1705,12 +1687,7 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                         onExpandedChange = { translationFontExpanded = it }
                     ) {
                         OutlinedTextField(
-                            value = when (translationFontFamily) {
-                                "Amiri" -> if (isArabic) "Amiri (أميري / مائل)" else "Amiri (Elegant Serif)"
-                                "Cairo" -> if (isArabic) "Cairo (كايرو / حديث)" else "Cairo (Clean Sans)"
-                                "Monospace" -> if (isArabic) "Monospace (منسق)" else "Monospace Modern"
-                                else -> if (isArabic) "الخط الافتراضي (Default)" else "Standard Subtitle"
-                            },
+                            value = translationFontFamily,
                             onValueChange = {},
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = translationFontExpanded) },
@@ -1733,34 +1710,16 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                             expanded = translationFontExpanded,
                             onDismissRequest = { translationFontExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text(if (isArabic) "الخط الافتراضي (Default)" else "Standard Subtitle", color = TextSoftColor) },
-                                onClick = {
-                                    scope.launch { settingsManager.setTranslationFontFamily("Default") }
-                                    translationFontExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (isArabic) "Amiri (أميري / مائل)" else "Amiri (Elegant Serif)", color = TextSoftColor) },
-                                onClick = {
-                                    scope.launch { settingsManager.setTranslationFontFamily("Amiri") }
-                                    translationFontExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (isArabic) "Cairo (كايرو / حديث)" else "Cairo (Clean Sans)", color = TextSoftColor) },
-                                onClick = {
-                                    scope.launch { settingsManager.setTranslationFontFamily("Cairo") }
-                                    translationFontExpanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(if (isArabic) "Monospace (ثابت العرض)" else "Monospace Modern", color = TextSoftColor) },
-                                onClick = {
-                                    scope.launch { settingsManager.setTranslationFontFamily("Monospace") }
-                                    translationFontExpanded = false
-                                }
-                            )
+                            val englishFonts = listOf("Montserrat", "Roboto", "Playfair", "Lato")
+                            englishFonts.forEach { font ->
+                                DropdownMenuItem(
+                                    text = { Text(font, color = TextSoftColor) },
+                                    onClick = {
+                                        scope.launch { settingsManager.setTranslationFontFamily(font) }
+                                        translationFontExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -1774,11 +1733,11 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                             .background(ScreenBg, RoundedCornerShape(12.dp))
                             .padding(12.dp)
                     ) {
-                        TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize - 2).coerceAtLeast(15)) } }) {
+                        TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize - 2).coerceAtLeast(1)) } }) {
                             Text("A-", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                         Text("${translationFontSize}px", color = TextSoftColor, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize + 2).coerceAtMost(60)) } }) {
+                        TextButton(onClick = { scope.launch { settingsManager.setTranslationFontSize((translationFontSize + 2).coerceAtMost(100)) } }) {
                             Text("A+", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         }
                     }
