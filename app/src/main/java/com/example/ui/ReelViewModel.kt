@@ -378,21 +378,22 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
     private fun fetchReciters() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val request = Request.Builder().url("https://api.alquran.cloud/v1/edition?format=audio&language=ar").build()
+                // Fetch from MP3Quran API
+                val request = Request.Builder().url("https://mp3quran.net/api/v3/reciters?language=ar").build()
                 val response = client.newCall(request).execute()
                 if (response.isSuccessful) {
                     val json = JSONObject(response.body?.string() ?: "")
-                    val data = json.getJSONArray("data")
+                    val recitersArray = json.getJSONArray("reciters")
                     val list = mutableListOf<Pair<String, String>>()
-                    for (i in 0 until data.length()) {
-                        val obj = data.getJSONObject(i)
-                        val id = obj.getString("identifier")
-                        val name = if (obj.has("name") && !obj.isNull("name")) {
-                            obj.getString("name")
-                        } else {
-                            obj.getString("englishName")
+                    for (i in 0 until recitersArray.length()) {
+                        val obj = recitersArray.getJSONObject(i)
+                        val name = obj.getString("name")
+                        val moshafArray = obj.getJSONArray("moshaf")
+                        if (moshafArray.length() > 0) {
+                            val server = moshafArray.getJSONObject(0).getString("server")
+                            // Prefix with "mp3quran|" to identify in VideoGenerator
+                            list.add("mp3quran|$server" to name)
                         }
-                        list.add(id to name)
                     }
                     if (list.isNotEmpty()) {
                         _reciters.value = list
@@ -400,11 +401,11 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                // Fallback list
+                // Fallback list to MP3Quran servers
                 _reciters.value = listOf(
-                    "ar.alafasy" to "مشاري العفاسي",
-                    "ar.sudais" to "عبد الرحمن السديس",
-                    "ar.abdulbasitmurattal" to "عبد الباسط عبد الصمد"
+                    "mp3quran|https://server11.mp3quran.net/sobhi/" to "إسلام صبحي",
+                    "mp3quran|https://server8.mp3quran.net/afs/" to "مشاري العفاسي",
+                    "mp3quran|https://server11.mp3quran.net/sds/" to "عبدالرحمن السديس"
                 )
             }
         }
