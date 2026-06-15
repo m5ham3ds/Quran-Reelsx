@@ -45,6 +45,8 @@ fun SettingsScreen(
     val isDark by settingsManager.themeMode.collectAsState(initial = true)
     val showTrans by settingsManager.showTranslation.collectAsState(initial = true)
     val language by settingsManager.language.collectAsState(initial = "ar")
+    val fontFamily by settingsManager.fontFamily.collectAsState(initial = "Amiri")
+    val translationFontFamily by settingsManager.translationFontFamily.collectAsState(initial = "Montserrat")
 
     val isArabic = language == "ar"
 
@@ -203,6 +205,102 @@ fun SettingsScreen(
                                     checkedTrackColor = Color(0x6664B5F6)
                                 )
                             )
+                        }
+
+                        HorizontalDivider(color = Color(0x15FFFFFF))
+
+                        // Font Family picker
+                        Column {
+                            Text(
+                                text = if (isArabic) "خط الآيات القرآنية" else "Quranic Font",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            var fontExpanded by remember { mutableStateOf(false) }
+                            val arabicFonts = listOf("Amiri", "Cairo", "Scheherazade New", "Lateef", "Reem Kufi")
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Surface(
+                                    onClick = { fontExpanded = true },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0x14FFFFFF),
+                                    border = BorderStroke(1.dp, Color(0x2BFFFFFF)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(text = fontFamily, color = Color.White, fontWeight = FontWeight.Medium)
+                                        Icon(imageVector = Icons.Default.Palette, contentDescription = null, tint = Color(0xFFCFD8DC))
+                                    }
+                                }
+                                DropdownMenu(
+                                    expanded = fontExpanded,
+                                    onDismissRequest = { fontExpanded = false },
+                                    modifier = Modifier.fillMaxWidth(0.85f).background(Color(0xFF1E2F2C))
+                                ) {
+                                    arabicFonts.forEach { font ->
+                                        DropdownMenuItem(
+                                            text = { Text(font, color = Color.White, fontWeight = FontWeight.Bold) },
+                                            onClick = {
+                                                scope.launch { settingsManager.setFontFamily(font) }
+                                                fontExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        HorizontalDivider(color = Color(0x15FFFFFF))
+
+                        // Translation Font Family picker
+                        Column {
+                            Text(
+                                text = if (isArabic) "خط الترجمة" else "Translation Font",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 15.sp,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            var transFontExpanded by remember { mutableStateOf(false) }
+                            val englishFonts = listOf("Montserrat", "Roboto", "Playfair", "Lato")
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                Surface(
+                                    onClick = { transFontExpanded = true },
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = Color(0x14FFFFFF),
+                                    border = BorderStroke(1.dp, Color(0x2BFFFFFF)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(text = translationFontFamily, color = Color.White, fontWeight = FontWeight.Medium)
+                                        Icon(imageVector = Icons.Default.Palette, contentDescription = null, tint = Color(0xFFCFD8DC))
+                                    }
+                                }
+                                DropdownMenu(
+                                    expanded = transFontExpanded,
+                                    onDismissRequest = { transFontExpanded = false },
+                                    modifier = Modifier.fillMaxWidth(0.85f).background(Color(0xFF1E2F2C))
+                                ) {
+                                    englishFonts.forEach { font ->
+                                        DropdownMenuItem(
+                                            text = { Text(font, color = Color.White, fontWeight = FontWeight.Bold) },
+                                            onClick = {
+                                                scope.launch { settingsManager.setTranslationFontFamily(font) }
+                                                transFontExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         HorizontalDivider(color = Color(0x15FFFFFF))

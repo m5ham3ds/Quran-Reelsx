@@ -73,10 +73,65 @@ data class VerseData(
 
 class VideoGenerator {
 
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
     
     @Volatile 
     private var threadError: Throwable? = null
+    
+    // Cached typefaces
+    private var customArabicTypefaces = mutableMapOf<String, Typeface>()
+    private var customEnglishTypefaces = mutableMapOf<String, Typeface>()
+    
+    private val arabicFontUrls = mapOf(
+        "Amiri" to "https://github.com/google/fonts/raw/main/ofl/amiriquran/AmiriQuran-Regular.ttf",
+        "Cairo" to "https://github.com/google/fonts/raw/main/ofl/cairo/Cairo-Bold.ttf",
+        "Scheherazade New" to "https://github.com/google/fonts/raw/main/ofl/scheherazadenew/ScheherazadeNew-Bold.ttf",
+        "Lateef" to "https://github.com/google/fonts/raw/main/ofl/lateef/Lateef-Regular.ttf",
+        "Reem Kufi" to "https://github.com/google/fonts/raw/main/ofl/reemkufi/ReemKufi-Bold.ttf"
+    )
+    
+    private val englishFontUrls = mapOf(
+        "Montserrat" to "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-Medium.ttf",
+        "Roboto" to "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Medium.ttf",
+        "Playfair" to "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay-Italic.ttf",
+        "Lato" to "https://github.com/google/fonts/raw/main/ofl/lato/Lato-Regular.ttf"
+    )
+
+    private fun getArabicTypeface(context: Context, fontName: String): Typeface {
+        return customArabicTypefaces[fontName] ?: try {
+            val fileName = fontName.replace(" ", "") + ".ttf"
+            val file = File(context.cacheDir, fileName)
+            if (file.exists() && file.length() > 1000) {
+                val tf = Typeface.createFromFile(file)
+                customArabicTypefaces[fontName] = tf
+                tf
+            } else {
+                Typeface.create("serif", Typeface.BOLD)
+            }
+        } catch (e: Exception) {
+            Typeface.create("serif", Typeface.BOLD)
+        }
+    }
+
+    private fun getEnglishTypeface(context: Context, fontName: String): Typeface {
+        return customEnglishTypefaces[fontName] ?: try {
+            val fileName = "EN_" + fontName.replace(" ", "") + ".ttf"
+            val file = File(context.cacheDir, fileName)
+            if (file.exists() && file.length() > 1000) {
+                val tf = Typeface.createFromFile(file)
+                customEnglishTypefaces[fontName] = tf
+                tf
+            } else {
+                Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            }
+        } catch (e: Exception) {
+            Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        }
+    }
 
     suspend fun generateReel(
         context: Context,
@@ -126,6 +181,29 @@ class VideoGenerator {
             val translationColorStr = settingsManager.translationColor.first()
             val translationFontFamily = settingsManager.translationFontFamily.first()
             val pixabayApiKey = settingsManager.pixabayApiKey.first()
+            
+            // Download and prepare custom fonts if needed
+            try {
+                val arFontFileName = fontFamily.replace(" ", "") + ".ttf"
+                val arabicFontCacheFile = File(context.cacheDir, arFontFileName)
+                val arUrl = arabicFontUrls[fontFamily]
+                
+                if (arUrl != null && (!arabicFontCacheFile.exists() || arabicFontCacheFile.length() < 1000)) {
+                    onProgress(if (isArabic) "جاري تحميل خط القرآن ($fontFamily)..." else "Downloading primary font...", 0.01f)
+                    downloadAudio(arUrl, arabicFontCacheFile)
+                }
+                
+                val enFontFileName = "EN_" + translationFontFamily.replace(" ", "") + ".ttf"
+                val englishFontCacheFile = File(context.cacheDir, enFontFileName)
+                val enUrl = englishFontUrls[translationFontFamily]
+                
+                if (enUrl != null && (!englishFontCacheFile.exists() || englishFontCacheFile.length() < 1000)) {
+                    onProgress(if (isArabic) "جاري تحميل خط الترجمة الإنجليزية ($translationFontFamily)..." else "Downloading secondary font...", 0.015f)
+                    downloadAudio(enUrl, englishFontCacheFile)
+                }
+            } catch (e: Exception) {
+                SystemDiagnosticTracker.addLog("FONT", "فشل تحميل الخطوط المخصصة: ${e.message}")
+            }
             
             // Optional: Prepend Basmalah (بسم الله الرحمن الرحيم) as a separate verse/card
             if (includeBasmalah && surah != 1 && surah != 9) {
@@ -1421,23 +1499,20 @@ class VideoGenerator {
         }
         
         // Draw Surah Name at top
+        val tfArabic = getArabicTypeface(context, fontFamily)
+        
         val surahPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             alpha = (textOpacity * 255).toInt().coerceIn(0, 255)
             this.textAlign = Paint.Align.CENTER
-            typeface = Typeface.create("serif", Typeface.NORMAL)
+            typeface = tfArabic
             textSize = 50f
             setShadowLayer(8f, 0f, 4f, Color.argb(200, 0, 0, 0))
         }
         canvas.drawText(surahName, 360f, 180f, surahPaint)
         
         // 2. Typeface config
-        val tf = when (fontFamily) {
-            "Amiri" -> Typeface.create("serif", Typeface.BOLD)
-            "Cairo" -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            "Monospace" -> Typeface.create("monospace", Typeface.BOLD)
-            else -> Typeface.create("sans-serif-black", Typeface.NORMAL)
-        }
+        val tf = tfArabic
         
         val tColor = try {
             Color.parseColor(textColorStr)
@@ -1481,12 +1556,7 @@ class VideoGenerator {
         val transPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = transColor
             this.textAlign = Paint.Align.LEFT
-            typeface = when (translationFontFamily) {
-                "Amiri" -> Typeface.create("serif", Typeface.ITALIC)
-                "Cairo" -> Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                "Monospace" -> Typeface.create("monospace", Typeface.NORMAL)
-                else -> Typeface.create("sans-serif", Typeface.NORMAL)
-            }
+            typeface = getEnglishTypeface(context, translationFontFamily)
             this.textSize = translationFontSize.toFloat() * 1.8f
             setShadowLayer(8f, 0f, 4f, Color.argb(200, 0, 0, 0))
         }
@@ -1755,13 +1825,29 @@ class VideoGenerator {
                 .post(requestBody)
                 .build()
 
-            val uploadResponse = client.newCall(uploadRequest).execute()
-            if (!uploadResponse.isSuccessful) {
-                val err = "فشل رفع الملف الصوتي لـ WhisperX. الرمز: ${uploadResponse.code}"
-                SystemDiagnosticTracker.addLog("ERROR", err)
-                throw Exception(err)
+            var uploadResponseBody = ""
+            var uRetries = 0
+            while(uRetries < 3) {
+                try {
+                    val uploadResponse = client.newCall(uploadRequest).execute()
+                    if (!uploadResponse.isSuccessful) {
+                        if (uploadResponse.code == 504 || uploadResponse.code == 503) {
+                            Thread.sleep(5000)
+                            uRetries++
+                            continue
+                        } else {
+                            throw Exception("فشل رفع الملف الصوتي لـ WhisperX. الرمز: ${uploadResponse.code}")
+                        }
+                    }
+                    uploadResponseBody = uploadResponse.body?.string() ?: ""
+                    break
+                } catch(e: Exception) {
+                    uRetries++
+                    if(uRetries >= 3) throw e
+                    Thread.sleep(5000)
+                }
             }
-            val uploadResponseBody = uploadResponse.body?.string() ?: throw Exception("Empty upload response")
+            if(uploadResponseBody.isEmpty()) throw Exception("Empty upload response")
             SystemDiagnosticTracker.addLog("WHISPERX_API", "تم الرفع بنجاح. استجابة الرفع: $uploadResponseBody")
             val jArray = org.json.JSONArray(uploadResponseBody)
             val remotePath = jArray.getString(0)
@@ -1788,13 +1874,29 @@ class VideoGenerator {
                 .post(alignPayload.toString().toRequestBody(jsonMediaType))
                 .build()
 
-            val alignResponse = client.newCall(alignRequest).execute()
-            if (!alignResponse.isSuccessful) {
-                val err = "فشل بدء المطابقة في WhisperX. الرمز: ${alignResponse.code}"
-                SystemDiagnosticTracker.addLog("ERROR", err)
-                throw Exception(err)
+            var alignResponseBody = ""
+            var aRetries = 0
+            while(aRetries < 3) {
+                try {
+                    val alignResponse = client.newCall(alignRequest).execute()
+                    if (!alignResponse.isSuccessful) {
+                        if (alignResponse.code == 504 || alignResponse.code == 503) {
+                            Thread.sleep(5000)
+                            aRetries++
+                            continue
+                        } else {
+                            throw Exception("فشل بدء المطابقة في WhisperX. الرمز: ${alignResponse.code}")
+                        }
+                    }
+                    alignResponseBody = alignResponse.body?.string() ?: ""
+                    break
+                } catch(e: Exception) {
+                    aRetries++
+                    if(aRetries >= 3) throw e
+                    Thread.sleep(5000)
+                }
             }
-            val alignResponseBody = alignResponse.body?.string() ?: throw Exception("Empty alignment response")
+            if(alignResponseBody.isEmpty()) throw Exception("Empty alignment response")
             SystemDiagnosticTracker.addLog("WHISPERX_API", "استجابة تهيئة المواءمة: $alignResponseBody")
             val eventIdJson = org.json.JSONObject(alignResponseBody)
             val eventId = eventIdJson.getString("event_id")
