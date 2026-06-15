@@ -41,6 +41,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.Font
+import java.io.File
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -57,7 +59,7 @@ import com.example.ui.ReelViewModel
 import com.example.ui.settings.SettingsScreen
 import com.example.ui.social.SocialMediaScreen
 import com.example.ui.theme.MyApplicationTheme
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 
 fun String.parseArabicOrEnglishDigits(): Int? {
     val englishStr = this.map { ch ->
@@ -432,9 +434,9 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
 
     // Load initial values from settings on start
     val savedSurahIdx by settingsManager.selectedSurahIdx.collectAsState(initial = -1)
-    val savedStartAyah by settingsManager.startAyahText.collectAsState(initial = "")
-    val savedEndAyah by settingsManager.endAyahText.collectAsState(initial = "")
-    val savedReciterId by settingsManager.selectedReciterId.collectAsState(initial = "")
+    val savedStartAyah by settingsManager.startAyahText.collectAsState(initial = "INITIAL_STATE")
+    val savedEndAyah by settingsManager.endAyahText.collectAsState(initial = "INITIAL_STATE")
+    val savedReciterId by settingsManager.selectedReciterId.collectAsState(initial = "INITIAL_STATE")
 
     LaunchedEffect(savedSurahIdx) {
         if (savedSurahIdx >= 0) {
@@ -442,17 +444,17 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
         }
     }
     LaunchedEffect(savedStartAyah) {
-        if (savedStartAyah.isNotEmpty()) {
+        if (savedStartAyah != "INITIAL_STATE") {
             startAyahText = savedStartAyah
         }
     }
     LaunchedEffect(savedEndAyah) {
-        if (savedEndAyah.isNotEmpty()) {
+        if (savedEndAyah != "INITIAL_STATE") {
             endAyahText = savedEndAyah
         }
     }
     LaunchedEffect(savedReciterId, recitersList) {
-        if (savedReciterId.isNotEmpty() && recitersList.isNotEmpty()) {
+        if (savedReciterId != "INITIAL_STATE" && recitersList.isNotEmpty()) {
             val idx = recitersList.indexOfFirst { it.first == savedReciterId }
             if (idx >= 0) {
                 selectedReciterIdx = idx
@@ -549,13 +551,11 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                                         surahExpanded = false
                                         // Reset bounds when surah changes
                                         startAyahText = "1"
-                                        val max = SURAH_COUNTS[index + 1] ?: 1
-                                        val initialEndStr = if (max >= 5) "5" else max.toString()
-                                        endAyahText = initialEndStr
+                                        endAyahText = ""
                                         scope.launch {
                                             settingsManager.setSelectedSurahIdx(index)
                                             settingsManager.setStartAyahText("1")
-                                            settingsManager.setEndAyahText(initialEndStr)
+                                            settingsManager.setEndAyahText("")
                                         }
                                     }
                                 )
@@ -1263,10 +1263,101 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
     var fontTypeExpanded by remember { mutableStateOf(false) }
     var translationFontExpanded by remember { mutableStateOf(false) }
 
+    var showAddFontDialog by remember { mutableStateOf(false) }
+    var selectedFontUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var customFontTarget by remember { mutableStateOf("Main") }
+
+    val fontPickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        selectedFontUri = uri
+    }
+
+    if (showAddFontDialog) {
+        BasicAlertDialog(
+            onDismissRequest = {
+                showAddFontDialog = false
+                selectedFontUri = null
+            }
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = CardBg,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(if (isArabic) "إضافة خط مخصص" else "Add Custom Font", color = LuxuryGold, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    
+                    Text(if (isArabic) "اختر مكان تطبيق الخط:" else "Select target:", color = Color.White)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = customFontTarget == "Main", onClick = { customFontTarget = "Main" }, colors = RadioButtonDefaults.colors(selectedColor = LuxuryGold))
+                        Text(if (isArabic) "الخط الأساسي" else "Main Font", color = Color.White)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        RadioButton(selected = customFontTarget == "Subtitles", onClick = { customFontTarget = "Subtitles" }, colors = RadioButtonDefaults.colors(selectedColor = LuxuryGold))
+                        Text(if (isArabic) "خط الترجمة" else "Subtitles Font", color = Color.White)
+                    }
+
+                    Button(
+                        onClick = { fontPickerLauncher.launch("*/*") },
+                        colors = ButtonDefaults.buttonColors(containerColor = ScreenBg),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (isArabic) "رفع ملف الخط (TTF/OTF)" else "Upload Font (TTF/OTF)", color = LuxuryGold)
+                    }
+
+                    if (selectedFontUri != null) {
+                        Text(if (isArabic) "تم اختيار الملف بنجاح" else "File selected successfully", color = Color.Green, fontSize = 12.sp)
+                    }
+
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                        TextButton(onClick = { 
+                            showAddFontDialog = false
+                            selectedFontUri = null
+                        }) {
+                            Text(if (isArabic) "إلغاء" else "Cancel", color = Color.Gray)
+                        }
+                        TextButton(
+                            onClick = {
+                                val uri = selectedFontUri
+                                if (uri != null) {
+                                    scope.launch(Dispatchers.IO) {
+                                        try {
+                                            val inputStream = context.contentResolver.openInputStream(uri)
+                                            if (inputStream != null) {
+                                                val outFile = File(context.filesDir, "custom_font_${System.currentTimeMillis()}.ttf")
+                                                inputStream.use { input -> outFile.outputStream().use { output -> input.copyTo(output) } }
+                                                
+                                                if (customFontTarget == "Main") {
+                                                    settingsManager.setFontFamily(outFile.absolutePath)
+                                                } else {
+                                                    settingsManager.setTranslationFontFamily(outFile.absolutePath)
+                                                }
+                                            }
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                        showAddFontDialog = false
+                                        selectedFontUri = null
+                                    }
+                                }
+                            },
+                            enabled = selectedFontUri != null
+                        ) {
+                            Text(if (isArabic) "حفظ" else "Save", color = LuxuryGold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(if (isArabic) "تنسيق الخط والترجمة" else "Font & Subtitles Style", fontWeight = FontWeight.Bold, color = LuxuryGold, fontSize = 20.sp) },
+                navigationIcon = {
+                    IconButton(onClick = { showAddFontDialog = true }) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Font", tint = LuxuryGold)
+                    }
+                },
                 actions = {
                     TextButton(onClick = {
                         Toast.makeText(context, if (isArabic) "تم حفظ التنسيق تلقائياً" else "Style saved automatically", Toast.LENGTH_SHORT).show()
@@ -1890,11 +1981,15 @@ fun LivePreviewContainer(
                     
                     Text(
                         text = "إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ",
-                        fontFamily = when (fontFamily) {
-                            "Amiri" -> FontFamily.Serif
-                            "Cairo" -> FontFamily.SansSerif
-                            "Monospace" -> FontFamily.Monospace
-                            else -> FontFamily.Default
+                        fontFamily = if (fontFamily.startsWith("/")) {
+                            try { FontFamily(Font(File(fontFamily))) } catch(e: Exception) { FontFamily.Serif }
+                        } else {
+                            when (fontFamily) {
+                                "Amiri" -> FontFamily.Serif
+                                "Cairo" -> FontFamily.SansSerif
+                                "Monospace" -> FontFamily.Monospace
+                                else -> FontFamily.Default
+                            }
                         },
                         fontSize = (fontSize * 0.7f).sp, // Scaled for preview fits
                         fontWeight = FontWeight.Bold,
@@ -1920,11 +2015,15 @@ fun LivePreviewContainer(
                         )
                         Text(
                             text = "Indeed, We have granted you, [O Muhammad], al-Kawthar.",
-                            fontFamily = when (translationFontFamily) {
-                                "Amiri" -> FontFamily.Serif
-                                "Cairo" -> FontFamily.SansSerif
-                                "Monospace" -> FontFamily.Monospace
-                                else -> FontFamily.Default
+                            fontFamily = if (translationFontFamily.startsWith("/")) {
+                                try { FontFamily(Font(File(translationFontFamily))) } catch(e: Exception) { FontFamily.Default }
+                            } else {
+                                when (translationFontFamily) {
+                                    "Amiri" -> FontFamily.Serif
+                                    "Cairo" -> FontFamily.SansSerif
+                                    "Monospace" -> FontFamily.Monospace
+                                    else -> FontFamily.Default
+                                }
                             },
                             fontSize = (translationFontSize * 0.65f).sp,
                             fontWeight = FontWeight.Medium,

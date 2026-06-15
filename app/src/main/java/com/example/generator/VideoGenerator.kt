@@ -103,6 +103,14 @@ class VideoGenerator {
 
     private fun getArabicTypeface(context: Context, fontName: String): Typeface {
         return customArabicTypefaces[fontName] ?: try {
+            if (fontName.startsWith("/")) {
+                val file = File(fontName)
+                if (file.exists() && file.length() > 0) {
+                    val tf = Typeface.createFromFile(file)
+                    customArabicTypefaces[fontName] = tf
+                    return tf
+                }
+            }
             val fileName = fontName.replace(" ", "") + ".ttf"
             val file = File(context.cacheDir, fileName)
             if (file.exists() && file.length() > 1000) {
@@ -119,6 +127,14 @@ class VideoGenerator {
 
     private fun getEnglishTypeface(context: Context, fontName: String): Typeface {
         return customEnglishTypefaces[fontName] ?: try {
+            if (fontName.startsWith("/")) {
+                val file = File(fontName)
+                if (file.exists() && file.length() > 0) {
+                    val tf = Typeface.createFromFile(file)
+                    customEnglishTypefaces[fontName] = tf
+                    return tf
+                }
+            }
             val fileName = "EN_" + fontName.replace(" ", "") + ".ttf"
             val file = File(context.cacheDir, fileName)
             if (file.exists() && file.length() > 1000) {

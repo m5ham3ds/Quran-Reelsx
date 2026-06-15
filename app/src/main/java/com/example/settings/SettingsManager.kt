@@ -152,7 +152,7 @@ class SettingsManager(private val context: Context) {
     // HomeScreen selections flows
     val selectedSurahIdx: Flow<Int> = context.dataStore.data.map { it[SELECTED_SURAH_IDX] ?: 0 }
     val startAyahText: Flow<String> = context.dataStore.data.map { it[START_AYAH_TEXT] ?: "1" }
-    val endAyahText: Flow<String> = context.dataStore.data.map { it[END_AYAH_TEXT] ?: "5" }
+    val endAyahText: Flow<String> = context.dataStore.data.map { it[END_AYAH_TEXT] ?: "" }
     val selectedReciterId: Flow<String> = context.dataStore.data.map { it[SELECTED_RECITER_ID] ?: "ar.alafasy" }
     val includeBasmalah: Flow<Boolean> = context.dataStore.data.map { it[INCLUDE_BASMALAH] ?: true }
 
