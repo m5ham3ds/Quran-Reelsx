@@ -1247,6 +1247,9 @@ class VideoGenerator {
         val timeoutUs = 5000L
         var muxerStarted = false
         
+        var lastWrittenPts = -1L
+        var firstPts = -1L
+        
         while (!isEncoderEOS) {
             checkCancellationAndPause()
  
@@ -1267,8 +1270,6 @@ class VideoGenerator {
             }
             
             // D. Helper to drain encoder out
-            var lastWrittenPts = -1L
-            var firstPts = -1L
             fun drainEncoder(isEnd: Boolean = false) {
                 while (true) {
                     val encOutIdx = encoder.dequeueOutputBuffer(encoderBufferInfo, timeoutUs)
