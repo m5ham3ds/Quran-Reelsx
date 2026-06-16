@@ -56,6 +56,7 @@ import androidx.media3.ui.PlayerView
 import com.example.settings.SettingsManager
 import com.example.ui.ReelState
 import com.example.ui.ReelViewModel
+import com.example.ui.PopularClipsScreen
 import com.example.ui.settings.SettingsScreen
 import com.example.ui.social.SocialMediaScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -257,6 +258,7 @@ fun MainNavigationScaffold(
                 // Navigation Items
                 val menuItems = listOf(
                     Triple("home", if (isArabic) "الرئيسية" else "Home", Icons.Outlined.Home),
+                    Triple("popular", if (isArabic) "المقاطع الرائجة" else "Popular Clips", Icons.Default.Favorite),
                     Triple("font", if (isArabic) "تنسيق الخطوط والأنماط" else "Font & Custom Style", Icons.Default.Edit),
                     Triple("social", if (isArabic) "منصات النشر الفوري" else "Publish Channels", Icons.Default.Share),
                     Triple("settings", if (isArabic) "إعدادات المنصة العامة" else "App Preferences", Icons.Outlined.Settings)
@@ -331,6 +333,19 @@ fun MainNavigationScaffold(
                         )
                     )
                     NavigationBarItem(
+                        selected = selectedTab == "popular",
+                        onClick = { selectedTab = "popular" },
+                        icon = { Icon(Icons.Default.Favorite, contentDescription = null) },
+                        label = { Text(if (isArabic) "الرائجة" else "Trending") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = ScreenBg,
+                            selectedTextColor = LuxuryGold,
+                            unselectedIconColor = TextMutedColor,
+                            unselectedTextColor = TextMutedColor,
+                            indicatorColor = LuxuryGold
+                        )
+                    )
+                    NavigationBarItem(
                         selected = selectedTab == "font",
                         onClick = { selectedTab = "font" },
                         icon = { Icon(Icons.Default.Edit, contentDescription = null) },
@@ -381,6 +396,7 @@ fun MainNavigationScaffold(
             ) {
                 when (selectedTab) {
                     "home" -> HomeScreen(viewModel = viewModel, isArabic = isArabic, settingsManager = settingsManager)
+                    "popular" -> PopularClipsScreen(viewModel = viewModel, isArabic = isArabic, settingsManager = settingsManager)
                     "font" -> FontFormattingScreen(settingsManager = settingsManager, isArabic = isArabic)
                     "social" -> SocialMediaScreen(isArabic = isArabic)
                     "settings" -> SettingsScreen(onNavigateBack = { selectedTab = "home" })

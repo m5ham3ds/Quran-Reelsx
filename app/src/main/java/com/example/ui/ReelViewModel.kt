@@ -376,39 +376,20 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     private fun fetchReciters() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                // Fetch from MP3Quran API
-                val request = Request.Builder().url("https://mp3quran.net/api/v3/reciters?language=ar").build()
-                val response = client.newCall(request).execute()
-                if (response.isSuccessful) {
-                    val json = JSONObject(response.body?.string() ?: "")
-                    val recitersArray = json.getJSONArray("reciters")
-                    val list = mutableListOf<Pair<String, String>>()
-                    for (i in 0 until recitersArray.length()) {
-                        val obj = recitersArray.getJSONObject(i)
-                        val name = obj.getString("name")
-                        val moshafArray = obj.getJSONArray("moshaf")
-                        if (moshafArray.length() > 0) {
-                            val server = moshafArray.getJSONObject(0).getString("server")
-                            // Prefix with "mp3quran|" to identify in VideoGenerator
-                            list.add("mp3quran|$server" to name)
-                        }
-                    }
-                    if (list.isNotEmpty()) {
-                        _reciters.value = list
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                // Fallback list to MP3Quran servers
-                _reciters.value = listOf(
-                    "mp3quran|https://server11.mp3quran.net/sobhi/" to "إسلام صبحي",
-                    "mp3quran|https://server8.mp3quran.net/afs/" to "مشاري العفاسي",
-                    "mp3quran|https://server11.mp3quran.net/sds/" to "عبدالرحمن السديس"
-                )
-            }
-        }
+        val list = listOf(
+            "ar.islamsobhi" to "إسلام صبحي (Islam Sobhi)",
+            "ar.hazzaalblushi" to "هزاع البلوشي (Hazza Al Blushi)",
+            "ar.yasseradosari" to "ياسر الدوسري (Yasser Al Dosari)",
+            "ar.nasserallqatami" to "ناصر القطامي (Nasser Al Qatami)",
+            "ar.alafasy" to "مشاري العفاسي (Mishary Alafasy)",
+            "ar.mahermuaiqly" to "ماهر المعيقلي (Maher Al Muaiqly)",
+            "ar.saadghamdi" to "سعد الغامدي (Saad Al Ghamdi)",
+            "ar.faresabbad" to "فارس عباد (Fares Abbad)",
+            "ar.abdulbasitmurattal" to "عبد الباسط عبد الصمد (Abdul Basit Abdul Samad)",
+            "ar.minshawi" to "محمد صديق المنشاوي (Mohamed Siddiq Minshawi)",
+            "ar.husary" to "محمود خليل الحصري (Mahmoud Khalil Al-Husary)"
+        )
+        _reciters.value = list
     }
     
     fun generate(

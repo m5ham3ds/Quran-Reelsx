@@ -222,10 +222,10 @@ class VideoGenerator {
                 SystemDiagnosticTracker.addLog("FONT", "فشل تحميل الخطوط المخصصة: ${e.message}")
             }
             
-            val isMp3Quran = reciterId.startsWith("mp3quran|")
+            val isPopular = reciterId.startsWith("popular|")
             
             // Optional: Prepend Basmalah (بسم الله الرحمن الرحيم) as a separate verse/card
-            if (includeBasmalah && surah != 1 && surah != 9 && !isMp3Quran) {
+            if (includeBasmalah && surah != 1 && surah != 9 && !isPopular) {
                 SystemDiagnosticTracker.addLog("BASMALAH", "تهيئة البسملة المباركة (Basmalah required for surah $surah)")
                 onProgress(if (isArabic) "جاري تهيئة البسملة المباركة..." else "Initializing blessed Basmalah...", 0.02f)
                 try {
@@ -274,25 +274,112 @@ class VideoGenerator {
                 }
             }
             
-            var fullSurahAlignedSegments: List<WordSegment>? = null
-            var fullSurahAudioPath: String? = null
-            if (isMp3Quran) {
-                onProgress(if (isArabic) "جاري تحميل وتزامن السورة كاملة من MP3Quran..." else "Fetching full Surah for MP3Quran reciter...", 0.03f)
-                val serverUrl = reciterId.removePrefix("mp3quran|")
-                val url = serverUrl + String.format("%03d.mp3", surah)
-                val destFile = File(context.cacheDir, "full_surah_$surah.mp3")
-                SystemDiagnosticTracker.addLog("DOWNLOAD", "تحميل السورة كاملة من MP3Quran: $url")
-                downloadAudio(url, destFile)
-                fullSurahAudioPath = destFile.absolutePath
+            if (isPopular) {
+                val audioUrl = reciterId.substringAfter("popular|")
+                onProgress(if (isArabic) "جاري تحميل مراجع المقطع الرائج..." else "Downloading popular clip audio...", 0.05f)
+                
+                val destFile = File(context.cacheDir, "popular_clip_${surah}_${startAyah}_${endAyah}.mp3")
+                SystemDiagnosticTracker.addLog("DOWNLOAD", "تحميل المقطع المشهور من الرابط: $audioUrl")
+                downloadAudio(audioUrl, destFile)
+                SystemDiagnosticTracker.addLog("DOWNLOAD", "تم تحميل المقطع الرائج بنجاح، الحجم: ${destFile.length()} بايت")
 
-                val fullSurahText = fetchFullSurahText(surah)
-                SystemDiagnosticTracker.addLog("ALIGNMENT", "بدء مواءمة السورة كاملة مع WhisperX (قد يستغرق وقتا)")
-                fullSurahAlignedSegments = alignWithWhisperX(destFile, fullSurahText)
-                SystemDiagnosticTracker.addLog("ALIGNMENT", "تمت مواءمة السورة كاملة بنجاح")
-            }
+                // Fetch combined texts
+                val combinedArabic = java.lang.StringBuilder()
+                val combinedTranslation = java.lang.StringBuilder()
+                
+                for (ayah in startAyah..endAyah) {
+                    val info = fetchVerseInfo(surah, ayah, "quran-uthmani")
+                    var text = info.first
+                    if (surah != 1 && surah != 9 && ayah == 1) {
+                        val standardBasmalah = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
+                        text = text.trim()
+                        if (text.startsWith(standardBasmalah)) {
+                            text = text.substring(standardBasmalah.length).trim()
+                        } else {
+                            val keywords = listOf("بِسْمِ اللَّهِ", "بِسْمِ اللهِ", "بِسْمِ")
+                            for (kw in keywords) {
+                                if (text.startsWith(kw)) {
+                                    val idx = text.indexOf("الرَّحِيمِ")
+                                    if (idx != -1 && idx < 60) {
+                                        text = text.substring(idx + "الرَّحِيمِ".length).trim()
+                                        break
+                                    }
+                                    val idx2 = text.indexOf("الرَّحِيْمِ")
+                                    if (idx2 != -1 && idx2 < 60) {
+                                        text = text.substring(idx2 + "الرَّحِيْمِ".length).trim()
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    combinedArabic.append(text).append(" ")
+                    
+                    if (showTranslation) {
+                        var trans = fetchVerseInfo(surah, ayah, "en.asad").first
+                        if (surah != 1 && surah != 9 && ayah == 1) {
+                            val basmalahEnglishList = listOf(
+                                "In the name of God, the Most Gracious, the Most Merciful",
+                                "In the name of God, Most Gracious, Most Merciful",
+                                "In the name of Allah, the Entirely Merciful, the Especially Merciful",
+                                "In the name of Allah, the Beneficent, the Merciful",
+                                "In the name of Allah, the Compassionate, the Merciful",
+                                "In the name of God, the Compassionate, the Merciful"
+                            )
+                            var cleanTrans = trans.trim()
+                            for (b in basmalahEnglishList) {
+                                if (cleanTrans.lowercase().startsWith(b.lowercase())) {
+                                    cleanTrans = cleanTrans.substring(b.length).trim()
+                                    if (cleanTrans.startsWith("-") || cleanTrans.startsWith(".") || cleanTrans.startsWith(":") || cleanTrans.startsWith(",")) {
+                                        cleanTrans = cleanTrans.substring(1).trim()
+                                    }
+                                    break
+                                }
+                            }
+                            trans = cleanTrans
+                        }
+                        combinedTranslation.append(trans).append(" ")
+                    }
+                }
+                
+                val fullArabicText = combinedArabic.toString().trim()
+                val fullTranslationText = if (showTranslation) combinedTranslation.toString().trim() else null
 
-            // 2. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
-            for (i in 0 until totalAyahs) {
+                SystemDiagnosticTracker.addLog("ALIGNMENT", "بدء مواءمة المجمع للآيات المشهورة بالذكاء الاصطناعي WhisperX")
+                onProgress(if (isArabic) "جاري مواءمة الكلمات بالذكاء الاصطناعي لمجموع الآيات..." else "Aligning popular clip with WhisperX...", 0.12f)
+                val alignedSegments = alignWithWhisperX(destFile, fullArabicText)
+                SystemDiagnosticTracker.addLog("ALIGNMENT", "تمت مواءمة مقطع السورة بالكامل بنجاح. عدد الكلمات المسترجعة: ${alignedSegments.size}")
+                
+                onProgress(if (isArabic) "جاري ترميز صوت المقطع بدقة سينمائية..." else "Encoding popular clip audio...", 0.18f)
+                val aacFileName = "popular_clip_${surah}_${startAyah}_${endAyah}_transcoded.m4a"
+                val aacFile = File(context.cacheDir, aacFileName)
+                val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
+                SystemDiagnosticTracker.addLog("TRANSCODE", "تم تحويل ترميز ملف المقطع المشهور وإعداد مسار اللوحات")
+
+                val ext = MediaExtractor().apply { setDataSource(aacFile.absolutePath) }
+                ext.selectTrack(0)
+                var durationUs = ext.getTrackFormat(0).getLong(MediaFormat.KEY_DURATION, -1L)
+                if (durationUs <= 0) {
+                    var maxTs = 0L
+                    val bb = ByteBuffer.allocate(256)
+                    while (ext.readSampleData(bb, 0) >= 0) {
+                        maxTs = ext.sampleTime
+                        ext.advance()
+                    }
+                    durationUs = maxTs
+                }
+                ext.release()
+                
+                val durationMs = durationUs / 1000
+                SystemDiagnosticTracker.addLog("CHUNKS", "تقسيم المقطع المشهور إلى Smart Chunks للمزامنة البصرية")
+                val smartChunks = getSmartChunks(context, fullArabicText, fullTranslationText, alignedSegments, durationMs)
+                
+                val verseLabel = if (startAyah == endAyah) "الآية $startAyah" else "الآيات $startAyah-$endAyah"
+                verses.add(VerseData(verseLabel, fullArabicText, fullTranslationText, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
+                SystemDiagnosticTracker.addLog("PROCESS", "تم إعداد كارت مقطع الآيات المشهورة بنجاح مدة ${durationMs}ms")
+            } else {
+                // 2. Download translation & audio files, then transcode to AAC/M4A for 100% video muxing compatibility
+                for (i in 0 until totalAyahs) {
                 val ayah = startAyah + i
                 SystemDiagnosticTracker.addLog("AYAH_PROCESS", "=== بدء معالجة الآية رقم $ayah من السورة $surah ===")
                 onProgress(if (isArabic) "جاري تحميل الآية $ayah وحفظ مراجع الصوت..." else "Downloading reference audio for Ayah $ayah...", 0.05f + (i * 0.2f / totalAyahs))
@@ -353,91 +440,25 @@ class VideoGenerator {
                     }
                 }
 
-                val alignedSegments: List<WordSegment>
-                val destFile: File
+                val audioFileName = "${reciterId}_${surah}_${ayah}.mp3"
+                val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyahNumber.mp3"
+                val destFile = File(context.cacheDir, audioFileName)
                 
-                val timeline: List<Pair<Long, Float>>
-                if (isMp3Quran && fullSurahAlignedSegments != null && fullSurahAudioPath != null) {
-                    onProgress(if (isArabic) "استخراج تواقيت الآية $ayah من السورة كاملة" else "Extracting Ayah $ayah...", 0.07f + (i * 0.2f / totalAyahs))
-                    // Find matching words
-                    val wordsInAyah = text.split("\\s+".toRegex()).filter { it.isNotBlank() }
-                    var bestStartIndex = -1
-                    var bestMatchCount = 0
-                    val ayahWordCount = wordsInAyah.size
-                    
-                    // Simple sliding window matching
-                    if (wordsInAyah.isNotEmpty() && fullSurahAlignedSegments.isNotEmpty()) {
-                        for (w in 0..maxOf(0, fullSurahAlignedSegments.size - ayahWordCount)) {
-                            var matchCount = 0
-                            for (j in 0 until minOf(ayahWordCount, fullSurahAlignedSegments.size - w)) {
-                                val surahWord = fullSurahAlignedSegments[w + j].word.replace("[^\\p{L}]".toRegex(), "")
-                                val ayahWord = wordsInAyah[j].replace("[^\\p{L}]".toRegex(), "")
-                                if (surahWord.isNotEmpty() && ayahWord.isNotEmpty() && (surahWord.contains(ayahWord) || ayahWord.contains(surahWord))) {
-                                    matchCount++
-                                }
-                            }
-                            if (matchCount > bestMatchCount) {
-                                bestMatchCount = matchCount
-                                bestStartIndex = w
-                            }
-                        }
-                    }
-                    
-                    val segmentList = mutableListOf<WordSegment>()
-                    var extractStartUs = 0L
-                    var extractEndUs = 0L
-                    
-                    if (bestStartIndex != -1) {
-                        val selectedSegments = fullSurahAlignedSegments.subList(bestStartIndex, minOf(bestStartIndex + ayahWordCount, fullSurahAlignedSegments.size))
-                        extractStartUs = (selectedSegments.first().startTimeMs * 1000).toLong()
-                        extractEndUs = (selectedSegments.last().endTimeMs * 1000).toLong()
-                        
-                        // Offset the segments
-                        val offsetTimeMs = selectedSegments.first().startTimeMs
-                        for (seg in selectedSegments) {
-                            segmentList.add(WordSegment(seg.wordIndex, seg.startTimeMs - offsetTimeMs, seg.endTimeMs - offsetTimeMs, seg.word))
-                        }
-                    }
-                    
-                    alignedSegments = if (segmentList.isNotEmpty()) segmentList else listOf(WordSegment(0, 0L, 5000L, text))
-                    if (extractEndUs == 0L) {
-                        extractEndUs = extractStartUs + 5000000L
-                    }
-                    
-                    destFile = File(context.cacheDir, "${reciterId}_${surah}_${ayah}.mp3")
-                    
-                    val aacFileName = "${reciterId}_${surah}_${ayah}_transcoded.m4a"
-                    val aacFile = File(context.cacheDir, aacFileName)
-                    SystemDiagnosticTracker.addLog("TRANSCODE", "اقتطاع الآية $ayah من السورة")
-                    timeline = transcodeMp3ToAac(fullSurahAudioPath, aacFile.absolutePath, extractStartUs, extractEndUs)
-                    
-                    // Fake destFile just for the variable, we already transcoded
-                    destFile.writeText("dummy") 
-                    
-                } else {
-                    val audioFileName = "${reciterId}_${surah}_${ayah}.mp3"
-                    val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyahNumber.mp3"
-                    destFile = File(context.cacheDir, audioFileName)
-                    
-                    SystemDiagnosticTracker.addLog("DOWNLOAD", "تحميل تلاوة الآية $ayah من الرابط: $url")
-                    downloadAudio(url, destFile)
-                    SystemDiagnosticTracker.addLog("DOWNLOAD", "تم تحميل تلاوة الآية $ayah بنجاح، الحجم: ${destFile.length()} بايت")
-                    
-                    SystemDiagnosticTracker.addLog("ALIGNMENT", "بدء المواءمة بالذكاء الاصطناعي WhisperX للآية $ayah")
-                    onProgress(if (isArabic) "جاري مواءمة الكلمات بالذكاء الاصطناعي (WhisperX)..." else "Aligning word timings with WhisperX AI...", 0.07f + (i * 0.2f / totalAyahs))
-                    alignedSegments = alignWithWhisperX(destFile, text)
-                    SystemDiagnosticTracker.addLog("ALIGNMENT", "تمت مواءمة الآية $ayah بالكامل بنجاح. عدد الكلمات المسترجعة: ${alignedSegments.size}")
-                    
-                    onProgress(if (isArabic) "جاري ترميز ملف الصوت بدقة سينمائية..." else "Encoding audio block dynamically...", 0.12f + (i * 0.2f / totalAyahs))
-                    val aacFileName = "${reciterId}_${surah}_${ayah}_transcoded.m4a"
-                    val aacFile = File(context.cacheDir, aacFileName)
-                    SystemDiagnosticTracker.addLog("TRANSCODE", "تحويل ترميز الملف الصوتي للآية $ayah إلى AAC سينمائي")
-                    timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
-                    SystemDiagnosticTracker.addLog("TRANSCODE", "تم تحويل ترميز ملف الآية $ayah")
-                }
+                SystemDiagnosticTracker.addLog("DOWNLOAD", "تحميل تلاوة الآية $ayah من الرابط: $url")
+                downloadAudio(url, destFile)
+                SystemDiagnosticTracker.addLog("DOWNLOAD", "تم تحميل تلاوة الآية $ayah بنجاح، الحجم: ${destFile.length()} بايت")
                 
+                SystemDiagnosticTracker.addLog("ALIGNMENT", "بدء المواءمة بالذكاء الاصطناعي WhisperX للآية $ayah")
+                onProgress(if (isArabic) "جاري مواءمة الكلمات بالذكاء الاصطناعي (WhisperX)..." else "Aligning word timings with WhisperX AI...", 0.07f + (i * 0.2f / totalAyahs))
+                val alignedSegments = alignWithWhisperX(destFile, text)
+                SystemDiagnosticTracker.addLog("ALIGNMENT", "تمت مواءمة الآية $ayah بالكامل بنجاح. عدد الكلمات المسترجعة: ${alignedSegments.size}")
+                
+                onProgress(if (isArabic) "جاري ترميز ملف الصوت بدقة سينمائية..." else "Encoding audio block dynamically...", 0.12f + (i * 0.2f / totalAyahs))
                 val aacFileName = "${reciterId}_${surah}_${ayah}_transcoded.m4a"
                 val aacFile = File(context.cacheDir, aacFileName)
+                SystemDiagnosticTracker.addLog("TRANSCODE", "تحويل ترميز الملف الصوتي للآية $ayah إلى AAC سينمائي")
+                val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
+                SystemDiagnosticTracker.addLog("TRANSCODE", "تم تحويل ترميز ملف الآية $ayah")
                 
                 val ext = MediaExtractor().apply { setDataSource(aacFile.absolutePath) }
                 ext.selectTrack(0)
@@ -458,6 +479,7 @@ class VideoGenerator {
                 val smartChunks = getSmartChunks(context, text, translation, alignedSegments, durationMs)
                 verses.add(VerseData(verseInfo.third, text, translation, aacFile.absolutePath, durationUs, timeline, alignedSegments, smartChunks))
                 SystemDiagnosticTracker.addLog("AYAH_PROCESS", "اكتملت معالجة الآية $ayah بنجاح. المدة الزمنية: ${durationMs}ms، كتل العرض: ${smartChunks.size}")
+            }
             }
             
             // 3. Fetch Cinematic Background Portrait Video clip if Pexels or Pixabay API key is provided
