@@ -40,6 +40,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import kotlinx.coroutines.launch
 import com.example.settings.SettingsManager
 import com.example.ui.ReelState
 import com.example.ui.ReelViewModel
@@ -220,6 +221,11 @@ fun PopularClipsScreen(
     var selectedClip by remember { mutableStateOf<CuratedClip?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
 
+    var showDiagnosticDialog by remember { mutableStateOf(false) }
+    var diagnosticReportText by remember { mutableStateOf("") }
+    var isRunningAudit by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -354,6 +360,30 @@ fun PopularClipsScreen(
                                         fontSize = 13.sp
                                     )
                                 }
+                            }
+
+                            Button(
+                                onClick = {
+                                    isRunningAudit = true
+                                    showDiagnosticDialog = true
+                                    scope.launch {
+                                        val report = com.example.generator.SystemDiagnosticTracker.runFullSystemAudit(context)
+                                        diagnosticReportText = report
+                                        isRunningAudit = false
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0x22F44336), contentColor = Color(0xFFFF8A80)),
+                                border = BorderStroke(1.dp, Color(0x33F44336)),
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Outlined.Info, contentDescription = null, tint = Color(0xFFFF8A80), modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isArabic) "تشغيل الفحص والتشخيص الشامل 🔍" else "Run Comprehensive Diagnostics 🔍",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
                             }
                         }
                         is ReelState.Loading -> {
@@ -510,7 +540,38 @@ fun PopularClipsScreen(
                                     .height(280.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(Color.Black)
+                                    .clickable {
+                                        isRunningAudit = true
+                                        showDiagnosticDialog = true
+                                        scope.launch {
+                                            val report = com.example.generator.SystemDiagnosticTracker.runFullSystemAudit(context)
+                                            diagnosticReportText = report
+                                            isRunningAudit = false
+                                        }
+                                    }
                             )
+
+                            Button(
+                                onClick = { 
+                                    isRunningAudit = true
+                                    showDiagnosticDialog = true
+                                    scope.launch {
+                                        val report = com.example.generator.SystemDiagnosticTracker.runFullSystemAudit(context)
+                                        diagnosticReportText = report
+                                        isRunningAudit = false
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = CardBg, contentColor = LuxuryGold),
+                                border = BorderStroke(1.dp, BorderColor),
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(text = if (isArabic) "فاحص عمليات الإنتاج النظامي" else "System Operation Diagnostic", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
 
                             // Clean description and hashtags metadata display card
                             generatedMeta?.let { meta ->
@@ -1074,6 +1135,32 @@ fun PopularClipsScreen(
                 TextButton(onClick = { showAddDialog = false }) {
                     Text(if (isArabic) "إلغاء الأمر" else "Cancel", color = TextMutedColor)
                 }
+            }
+        )
+    }
+
+    if (showDiagnosticDialog) {
+        com.example.DiagnosticReportDialog(
+            reportText = diagnosticReportText,
+            isRunning = isRunningAudit,
+            isArabic = isArabic,
+            onDismiss = { showDiagnosticDialog = false },
+            onSaveReport = {
+                val path = com.example.generator.SystemDiagnosticTracker.saveReportToFilesAndGetPath(context, diagnosticReportText)
+                Toast.makeText(context, if (isArabic) "تم حفظ ملف التقرير بنجاح في:\n$path" else "Report saved successfully at:\n$path", Toast.LENGTH_LONG).show()
+            },
+            onCopyReport = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText("System Diagnostic Report", diagnosticReportText)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(context, if (isArabic) "تم نسخ نص التقرير بالكامل!" else "Full report copied to clipboard!", Toast.LENGTH_SHORT).show()
+            },
+            onShareReport = {
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, diagnosticReportText)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, if (isArabic) "مشاركة تقرير النظام" else "Share System Report"))
             }
         )
     }
