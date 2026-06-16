@@ -60,6 +60,7 @@ import com.example.ui.PopularClipsScreen
 import com.example.ui.settings.SettingsScreen
 import com.example.ui.social.SocialMediaScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.utils.NetworkUtils
 import kotlinx.coroutines.*
 
 fun String.parseArabicOrEnglishDigits(): Int? {
@@ -814,6 +815,10 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
                     if (state is ReelState.Idle || state is ReelState.Error || state is ReelState.Success) {
                         Button(
                             onClick = {
+                                if (!NetworkUtils.isNetworkAvailable(context)) {
+                                    Toast.makeText(context, if (isArabic) "تعذر بدء العملية: تأكد من اتصالك بالإنترنت" else "Check internet connection", Toast.LENGTH_LONG).show()
+                                    return@Button
+                                }
                                 val permissionsNeeded = mutableListOf<String>()
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -1280,6 +1285,50 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
     // Expansions
     var fontTypeExpanded by remember { mutableStateOf(false) }
     var translationFontExpanded by remember { mutableStateOf(false) }
+
+    // Download fonts effect for live preview
+    var triggerRecomposition by remember { mutableStateOf(0) }
+    LaunchedEffect(fontFamily, translationFontFamily) {
+        withContext(Dispatchers.IO) {
+            val client = okhttp3.OkHttpClient()
+            val arabicFontUrls = mapOf(
+                "Amiri" to "https://github.com/google/fonts/raw/main/ofl/amiriquran/AmiriQuran-Regular.ttf",
+                "Cairo" to "https://github.com/google/fonts/raw/main/ofl/cairo/Cairo-Bold.ttf",
+                "Scheherazade New" to "https://github.com/google/fonts/raw/main/ofl/scheherazadenew/ScheherazadeNew-Bold.ttf",
+                "Lateef" to "https://github.com/google/fonts/raw/main/ofl/lateef/Lateef-Regular.ttf",
+                "Reem Kufi" to "https://github.com/google/fonts/raw/main/ofl/reemkufi/ReemKufi-Bold.ttf"
+            )
+            val englishFontUrls = mapOf(
+                "Montserrat" to "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-Medium.ttf",
+                "Roboto" to "https://github.com/google/fonts/raw/main/ofl/roboto/static/Roboto-Medium.ttf", // fixed URL
+                "Playfair" to "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay-Italic.ttf",
+                "Lato" to "https://github.com/google/fonts/raw/main/ofl/lato/Lato-Regular.ttf"
+            )
+
+            fun down(name: String, urls: Map<String, String>, prefix: String = "") {
+                if (name.startsWith("/")) return
+                val file = File(context.cacheDir, prefix + name.replace(" ", "") + ".ttf")
+                if (!file.exists() || file.length() < 1000) {
+                    urls[name]?.let { url ->
+                        try {
+                            val request = okhttp3.Request.Builder().url(url).build()
+                            client.newCall(request).execute().use { response ->
+                                if (response.isSuccessful) {
+                                    response.body?.byteStream()?.use { input ->
+                                        file.outputStream().use { input.copyTo(it) }
+                                    }
+                                }
+                            }
+                        } catch(e: Exception) {}
+                    }
+                }
+            }
+
+            down(fontFamily, arabicFontUrls)
+            down(translationFontFamily, englishFontUrls, "EN_")
+            triggerRecomposition++
+        }
+    }
 
     var showAddFontDialog by remember { mutableStateOf(false) }
     var selectedFontUri by remember { mutableStateOf<android.net.Uri?>(null) }
@@ -1921,7 +1970,8 @@ fun FontFormattingScreen(settingsManager: SettingsManager, isArabic: Boolean) {
                 translationFontSize = translationFontSize,
                 translationColorStr = translationColorStr,
                 translationFontFamily = translationFontFamily,
-                isArabic = isArabic
+                isArabic = isArabic,
+                triggerRecomposition = triggerRecomposition
             )
         }
     }
@@ -1943,8 +1993,48 @@ fun LivePreviewContainer(
     translationFontSize: Int,
     translationColorStr: String,
     translationFontFamily: String,
-    isArabic: Boolean
+    isArabic: Boolean,
+    triggerRecomposition: Int = 0
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    // Remember font families from cache
+    val quranFontFamily = remember(fontFamily, triggerRecomposition) {
+        if (fontFamily.startsWith("/")) {
+            try { FontFamily(Font(File(fontFamily))) } catch(e: Exception) { FontFamily.Serif }
+        } else {
+            val file = File(context.cacheDir, fontFamily.replace(" ", "") + ".ttf")
+            if (file.exists() && file.length() > 1000) {
+                try { FontFamily(Font(file)) } catch(e: Exception) { FontFamily.Serif }
+            } else {
+                when (fontFamily) {
+                    "Amiri" -> FontFamily.Serif
+                    "Cairo" -> FontFamily.SansSerif
+                    "Monospace" -> FontFamily.Monospace
+                    else -> FontFamily.Default
+                }
+            }
+        }
+    }
+    
+    val transFontFamily = remember(translationFontFamily, triggerRecomposition) {
+        if (translationFontFamily.startsWith("/")) {
+            try { FontFamily(Font(File(translationFontFamily))) } catch(e: Exception) { FontFamily.Default }
+        } else {
+            val file = File(context.cacheDir, "EN_" + translationFontFamily.replace(" ", "") + ".ttf")
+            if (file.exists() && file.length() > 1000) {
+                try { FontFamily(Font(file)) } catch(e: Exception) { FontFamily.Default }
+            } else {
+                when (translationFontFamily) {
+                    "Amiri" -> FontFamily.Serif
+                    "Cairo" -> FontFamily.SansSerif
+                    "Monospace" -> FontFamily.Monospace
+                    else -> FontFamily.Default
+                }
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1999,16 +2089,7 @@ fun LivePreviewContainer(
                     
                     Text(
                         text = "إِنَّا أَعْطَيْنَاكَ الْكَوْثَرَ",
-                        fontFamily = if (fontFamily.startsWith("/")) {
-                            try { FontFamily(Font(File(fontFamily))) } catch(e: Exception) { FontFamily.Serif }
-                        } else {
-                            when (fontFamily) {
-                                "Amiri" -> FontFamily.Serif
-                                "Cairo" -> FontFamily.SansSerif
-                                "Monospace" -> FontFamily.Monospace
-                                else -> FontFamily.Default
-                            }
-                        },
+                        fontFamily = quranFontFamily,
                         fontSize = (fontSize * 0.7f).sp, // Scaled for preview fits
                         fontWeight = FontWeight.Bold,
                         color = quranTextColor,
@@ -2033,16 +2114,7 @@ fun LivePreviewContainer(
                         )
                         Text(
                             text = "Indeed, We have granted you, [O Muhammad], al-Kawthar.",
-                            fontFamily = if (translationFontFamily.startsWith("/")) {
-                                try { FontFamily(Font(File(translationFontFamily))) } catch(e: Exception) { FontFamily.Default }
-                            } else {
-                                when (translationFontFamily) {
-                                    "Amiri" -> FontFamily.Serif
-                                    "Cairo" -> FontFamily.SansSerif
-                                    "Monospace" -> FontFamily.Monospace
-                                    else -> FontFamily.Default
-                                }
-                            },
+                            fontFamily = transFontFamily,
                             fontSize = (translationFontSize * 0.65f).sp,
                             fontWeight = FontWeight.Medium,
                             color = transColor,

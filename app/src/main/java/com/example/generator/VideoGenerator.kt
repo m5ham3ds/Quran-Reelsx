@@ -96,7 +96,7 @@ class VideoGenerator {
     
     private val englishFontUrls = mapOf(
         "Montserrat" to "https://github.com/google/fonts/raw/main/ofl/montserrat/Montserrat-Medium.ttf",
-        "Roboto" to "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Medium.ttf",
+        "Roboto" to "https://github.com/google/fonts/raw/main/ofl/roboto/static/Roboto-Medium.ttf",
         "Playfair" to "https://github.com/google/fonts/raw/main/ofl/playfairdisplay/PlayfairDisplay-Italic.ttf",
         "Lato" to "https://github.com/google/fonts/raw/main/ofl/lato/Lato-Regular.ttf"
     )

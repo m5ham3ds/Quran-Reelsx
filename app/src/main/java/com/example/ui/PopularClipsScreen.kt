@@ -35,12 +35,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.launch
+import com.example.utils.NetworkUtils
 import com.example.settings.SettingsManager
 import com.example.ui.ReelState
 import com.example.ui.ReelViewModel
@@ -65,7 +68,7 @@ data class CuratedClip(
     val videoQuery: String? = null
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun PopularClipsScreen(
     viewModel: ReelViewModel,
@@ -224,6 +227,7 @@ fun PopularClipsScreen(
     var showDiagnosticDialog by remember { mutableStateOf(false) }
     var diagnosticReportText by remember { mutableStateOf("") }
     var isRunningAudit by remember { mutableStateOf(false) }
+    var clipToDelete by remember { mutableStateOf<CuratedClip?>(null) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -759,9 +763,10 @@ fun PopularClipsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 6.dp)
-                        .clickable {
-                            selectedClip = if (isCurrentSelected) null else clip
-                        }
+                        .combinedClickable(
+                            onClick = { selectedClip = if (isCurrentSelected) null else clip },
+                            onLongClick = { clipToDelete = clip }
+                        )
                         .testTag("clip_card_${clip.id}")
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -785,12 +790,16 @@ fun PopularClipsScreen(
                                                 previewPlayer.pause()
                                                 playingClipId = null
                                             } else {
-                                                playingClipId = clip.id
-                                                isPreviewLoading = true
-                                                previewPlayer.stop()
-                                                previewPlayer.setMediaItem(MediaItem.fromUri(clip.audioUrl))
-                                                previewPlayer.prepare()
-                                                previewPlayer.playWhenReady = true
+                                                if (!NetworkUtils.isNetworkAvailable(context)) {
+                                                    Toast.makeText(context, if (isArabic) "تعذر تشغيل العينة: تأكد من اتصالك بالإنترنت" else "Could not play audio: check your connection", Toast.LENGTH_LONG).show()
+                                                } else {
+                                                    playingClipId = clip.id
+                                                    isPreviewLoading = true
+                                                    previewPlayer.stop()
+                                                    previewPlayer.setMediaItem(MediaItem.fromUri(clip.audioUrl))
+                                                    previewPlayer.prepare()
+                                                    previewPlayer.playWhenReady = true
+                                                }
                                             }
                                         },
                                     contentAlignment = Alignment.Center
@@ -893,6 +902,10 @@ fun PopularClipsScreen(
                                 // Generate Trigger Button
                                 Button(
                                     onClick = {
+                                        if (!NetworkUtils.isNetworkAvailable(context)) {
+                                            Toast.makeText(context, if (isArabic) "تعذر بدء المونتاج: تأكد من اتصالك بالإنترنت وحاول مجدداً" else "Could not start: check your internet connection", Toast.LENGTH_LONG).show()
+                                            return@Button
+                                        }
                                         // Stop any ongoing audio preview to prevent overlapping sounds
                                         previewPlayer.stop()
                                         playingClipId = null
@@ -1161,6 +1174,51 @@ fun PopularClipsScreen(
                     putExtra(Intent.EXTRA_TEXT, diagnosticReportText)
                 }
                 context.startActivity(Intent.createChooser(shareIntent, if (isArabic) "مشاركة تقرير النظام" else "Share System Report"))
+            }
+        )
+    }
+
+    clipToDelete?.let { clipInfo ->
+        AlertDialog(
+            onDismissRequest = { clipToDelete = null },
+            containerColor = CardBg,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isArabic) "حذف المقطع الرائج" else "Delete Popular Clip",
+                        color = TextSoftColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = if (isArabic) "هل أنت متأكد من أنك تود حذف هذا المقطع الرائج؟ (${clipInfo.reciter} - سورة ${SURAH_NAMES.getOrNull(clipInfo.surah - 1)} ${clipInfo.ayahStart}-${clipInfo.ayahEnd})" 
+                           else "Are you sure you want to delete this popular clip? (${clipInfo.reciter})",
+                    color = TextMutedColor,
+                    fontSize = 15.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        baseClipsList.remove(clipInfo)
+                        clipToDelete = null
+                        if (selectedClip?.id == clipInfo.id) {
+                            selectedClip = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text(if (isArabic) "نعم، احذفه" else "Yes, Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { clipToDelete = null }) {
+                    Text(if (isArabic) "لا ألغِ الأمر" else "No, Keep", color = TextSoftColor)
+                }
             }
         )
     }
