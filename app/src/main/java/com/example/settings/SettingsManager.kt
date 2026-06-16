@@ -83,6 +83,7 @@ class SettingsManager(private val context: Context) {
         val END_AYAH_TEXT = stringPreferencesKey("end_ayah_text")
         val SELECTED_RECITER_ID = stringPreferencesKey("selected_reciter_id")
         val INCLUDE_BASMALAH = booleanPreferencesKey("include_basmalah")
+        val ACTIVE_GENERATION_RECITER_ID = stringPreferencesKey("active_generation_reciter_id")
     }
 
     val pexelsApiKey: Flow<String> = context.dataStore.data.map { it[PEXELS_API_KEY] ?: "" }
@@ -155,6 +156,7 @@ class SettingsManager(private val context: Context) {
     val endAyahText: Flow<String> = context.dataStore.data.map { it[END_AYAH_TEXT] ?: "" }
     val selectedReciterId: Flow<String> = context.dataStore.data.map { it[SELECTED_RECITER_ID] ?: "ar.alafasy" }
     val includeBasmalah: Flow<Boolean> = context.dataStore.data.map { it[INCLUDE_BASMALAH] ?: true }
+    val activeGenerationReciterId: Flow<String> = context.dataStore.data.map { it[ACTIVE_GENERATION_RECITER_ID] ?: "ar.alafasy" }
 
     suspend fun savePexelsKey(key: String) {
         context.dataStore.edit { it[PEXELS_API_KEY] = key }
@@ -382,5 +384,9 @@ class SettingsManager(private val context: Context) {
 
     suspend fun setIncludeBasmalah(value: Boolean) {
         context.dataStore.edit { it[INCLUDE_BASMALAH] = value }
+    }
+
+    suspend fun setActiveGenerationReciterId(value: String) {
+        context.dataStore.edit { it[ACTIVE_GENERATION_RECITER_ID] = value }
     }
 }

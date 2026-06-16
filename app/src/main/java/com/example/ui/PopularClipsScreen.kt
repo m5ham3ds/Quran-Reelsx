@@ -38,6 +38,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.example.settings.SettingsManager
 import com.example.ui.ReelState
 import com.example.ui.ReelViewModel
@@ -73,7 +75,15 @@ fun PopularClipsScreen(
     val state by viewModel.uiState.collectAsState()
     
     // 1. Audio Preview Player Setup
-    val previewPlayer = remember { ExoPlayer.Builder(context).build() }
+    val previewPlayer = remember { 
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36")
+            .setAllowCrossProtocolRedirects(true)
+        
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
+            .build() 
+    }
     var playingClipId by remember { mutableStateOf<String?>(null) }
     var isPreviewLoading by remember { mutableStateOf(false) }
 
@@ -732,7 +742,7 @@ fun PopularClipsScreen(
                                         )
                                     } else {
                                         Icon(
-                                            imageVector = if (isPlayingThis) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                            imageVector = if (isPlayingThis) Icons.Default.Pause else Icons.Default.Headset,
                                             contentDescription = if (isPlayingThis) "إيقاف مؤقت المعاينة الصوتية" else "تقديم سماع المعاينة الصوتية",
                                             tint = if (isPlayingThis) ScreenBg else LuxuryGold,
                                             modifier = Modifier.size(22.dp)

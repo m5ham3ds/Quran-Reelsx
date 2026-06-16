@@ -136,6 +136,15 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
     
     init {
         fetchReciters()
+        
+        // Sync activeReciterId from persistence
+        viewModelScope.launch {
+            val settingsManager = com.example.settings.SettingsManager(getApplication())
+            settingsManager.activeGenerationReciterId.collect { id ->
+                _activeReciterId.value = id
+            }
+        }
+
         viewModelScope.launch {
             VideoGenerationService.serviceState.collect { state ->
                 when (state) {
@@ -411,6 +420,10 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
         currentEndAyah = endAyah
         currentReciterId = reciterId
         _activeReciterId.value = reciterId
+        viewModelScope.launch {
+            val settingsManager = com.example.settings.SettingsManager(getApplication())
+            settingsManager.setActiveGenerationReciterId(reciterId)
+        }
         currentVideoQuery = videoQuery
 
         _uiState.value = ReelState.Loading(if (isRetry) "جاري استئناف المعالجة وإعادة المحاولة..." else "جاري البدء...", 0f)
