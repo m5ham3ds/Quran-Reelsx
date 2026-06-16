@@ -119,7 +119,8 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
     private var currentReciterId: String = "ar.alafasy"
     private var currentVideoQuery: String? = null
 
-    val activeReciterId: String get() = currentReciterId
+    private val _activeReciterId = MutableStateFlow("ar.alafasy")
+    val activeReciterId: StateFlow<String> = _activeReciterId
 
     fun resumeGeneration(context: Context) {
         generate(
@@ -409,6 +410,7 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
         currentStartAyah = startAyah
         currentEndAyah = endAyah
         currentReciterId = reciterId
+        _activeReciterId.value = reciterId
         currentVideoQuery = videoQuery
 
         _uiState.value = ReelState.Loading(if (isRetry) "جاري استئناف المعالجة وإعادة المحاولة..." else "جاري البدء...", 0f)

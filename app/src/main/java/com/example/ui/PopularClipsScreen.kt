@@ -91,6 +91,16 @@ fun PopularClipsScreen(
                     playingClipId = null
                 }
             }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                android.util.Log.e("PopularClipsScreen", "ExoPlayer error: ${error.message}", error)
+                isPreviewLoading = false
+                playingClipId = null
+                Toast.makeText(
+                    context, 
+                    if (isArabic) "تعذر تشغيل العينة: تأكد من اتصالك بالإنترنت" else "Could not play audio: check your connection", 
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         })
     }
 
@@ -263,7 +273,8 @@ fun PopularClipsScreen(
         }
 
         // 2. Active Popular Clip Video Generation Progress UI Controller
-        val isActivePopular = viewModel.activeReciterId.startsWith("popular|")
+        val activeReciterState by viewModel.activeReciterId.collectAsState()
+        val isActivePopular = activeReciterState.startsWith("popular|")
         
         AnimatedVisibility(
             visible = state !is ReelState.Idle && isActivePopular,
@@ -708,7 +719,7 @@ fun PopularClipsScreen(
                                                 previewPlayer.stop()
                                                 previewPlayer.setMediaItem(MediaItem.fromUri(clip.audioUrl))
                                                 previewPlayer.prepare()
-                                                previewPlayer.play()
+                                                previewPlayer.playWhenReady = true
                                             }
                                         },
                                     contentAlignment = Alignment.Center

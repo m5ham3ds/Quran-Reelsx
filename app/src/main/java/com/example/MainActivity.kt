@@ -897,7 +897,8 @@ fun HomeScreen(viewModel: ReelViewModel, isArabic: Boolean, settingsManager: Set
             }
 
             // Status and Results
-            val isActivePopular = viewModel.activeReciterId.startsWith("popular|")
+            val activeReciterState by viewModel.activeReciterId.collectAsState()
+            val isActivePopular = activeReciterState.startsWith("popular|")
             AnimatedVisibility(
                 visible = state !is ReelState.Idle && !isActivePopular,
                 enter = fadeIn() + expandVertically(),
