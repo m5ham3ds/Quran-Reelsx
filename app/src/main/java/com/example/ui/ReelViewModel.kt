@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.generator.VideoGenerator
@@ -119,7 +121,9 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
     private var currentReciterId: String = "ar.alafasy"
     private var currentVideoQuery: String? = null
 
-    private val _activeReciterId = MutableStateFlow("ar.alafasy")
+    private val _activeReciterId = MutableStateFlow(
+        runBlocking { com.example.settings.SettingsManager(getApplication()).activeGenerationReciterId.first() }
+    )
     val activeReciterId: StateFlow<String> = _activeReciterId
 
     fun resumeGeneration(context: Context) {
