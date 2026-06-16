@@ -74,9 +74,9 @@ data class VerseData(
 class VideoGenerator {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
-        .writeTimeout(180, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(1800, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(1800, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(1800, java.util.concurrent.TimeUnit.SECONDS)
         .build()
     
     @Volatile 
@@ -2117,39 +2117,38 @@ class VideoGenerator {
 
             SystemDiagnosticTracker.addLog("WHISPERX_API", "بدء جلب وفحص المواءمة بشكل متتالي عبر معرف الحدث: $eventId")
             var attempt = 0
-            while (attempt < 20) {
-                val eventResponse = client.newCall(eventRequest).execute()
-                if (!eventResponse.isSuccessful) {
-                    eventResponse.close()
-                    val err = "فشل جلب حدث المواءمة. الرمز: ${eventResponse.code}"
-                    SystemDiagnosticTracker.addLog("ERROR", err)
-                    throw Exception(err)
-                }
-                val responseBody = eventResponse.body ?: throw Exception("Empty response body from alignment stream")
-                val reader = responseBody.charStream().buffered()
-                var line: String?
+            while (attempt < 60) {
                 var completedData: String? = null
-                while (reader.readLine().also { line = it } != null) {
-                    val currentLine = line ?: ""
-                    if (currentLine.startsWith("event: complete")) {
-                        val nextLine = reader.readLine() ?: ""
-                        if (nextLine.startsWith("data: ")) {
-                            completedData = nextLine.substring("data: ".length)
-                        }
-                    } else if (currentLine.startsWith("event: error")) {
-                        val nextLine = reader.readLine() ?: ""
-                        if (nextLine.startsWith("data: ")) {
-                            val errStr = "حدث خطأ في خادم WhisperX: " + nextLine.substring("data: ".length)
-                            SystemDiagnosticTracker.addLog("ERROR", errStr)
-                            throw Exception(errStr)
-                        } else {
-                            val errStr = "فشل مجرى المواءمة لـ WhisperX بسبب حدث خطأ"
-                            SystemDiagnosticTracker.addLog("ERROR", errStr)
-                            throw Exception(errStr)
+                try {
+                    val eventResponse = client.newCall(eventRequest).execute()
+                    if (!eventResponse.isSuccessful) {
+                        eventResponse.close()
+                        throw Exception("فصل غير متوقع، رمز الخطأ: ${eventResponse.code}")
+                    }
+                    val responseBody = eventResponse.body ?: throw Exception("Empty response body")
+                    val reader = responseBody.charStream().buffered()
+                    var line: String?
+                    while (reader.readLine().also { line = it } != null) {
+                        val currentLine = line ?: ""
+                        if (currentLine.startsWith("event: complete")) {
+                            val nextLine = reader.readLine() ?: ""
+                            if (nextLine.startsWith("data: ")) {
+                                completedData = nextLine.substring("data: ".length)
+                            }
+                        } else if (currentLine.startsWith("event: error")) {
+                            val nextLine = reader.readLine() ?: ""
+                            if (nextLine.startsWith("data: ")) {
+                                val errStr = "حدث خطأ في خادم WhisperX: " + nextLine.substring("data: ".length)
+                                throw Exception(errStr)
+                            } else {
+                                throw Exception("فشل مجرى المواءمة لـ WhisperX بسبب حدث خطأ")
+                            }
                         }
                     }
+                    eventResponse.close()
+                } catch (e: Exception) {
+                    SystemDiagnosticTracker.addLog("WHISPERX_API", "انقطع الاتصال أو حدث خطأ أثناء المراقبة: ${e.message} - جاري إعادة المحاولة...")
                 }
-                eventResponse.close()
 
                 if (completedData != null) {
                     SystemDiagnosticTracker.addLog("WHISPERX_API", "اكتمل التدفق بنجاح. جاري تحليل البيانات المسترجعة...")
