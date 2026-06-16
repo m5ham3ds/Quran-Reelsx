@@ -117,6 +117,9 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
     private var currentStartAyah: Int = 1
     private var currentEndAyah: Int = 5
     private var currentReciterId: String = "ar.alafasy"
+    private var currentVideoQuery: String? = null
+
+    val activeReciterId: String get() = currentReciterId
 
     fun resumeGeneration(context: Context) {
         generate(
@@ -125,7 +128,8 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
             startAyah = currentStartAyah,
             endAyah = currentEndAyah,
             reciterId = currentReciterId,
-            isRetry = true
+            isRetry = true,
+            videoQuery = currentVideoQuery
         )
     }
     
@@ -398,12 +402,14 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
         startAyah: Int,
         endAyah: Int,
         reciterId: String,
-        isRetry: Boolean = false
+        isRetry: Boolean = false,
+        videoQuery: String? = null
     ) {
         currentSurah = surah
         currentStartAyah = startAyah
         currentEndAyah = endAyah
         currentReciterId = reciterId
+        currentVideoQuery = videoQuery
 
         _uiState.value = ReelState.Loading(if (isRetry) "جاري استئناف المعالجة وإعادة المحاولة..." else "جاري البدء...", 0f)
         viewModelScope.launch {
@@ -421,6 +427,9 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                 putExtra("pexelsApiKey", pexelsApiKey)
                 putExtra("videoQuality", videoQuality)
                 putExtra("isRetry", isRetry)
+                if (videoQuery != null) {
+                    putExtra("videoQuery", videoQuery)
+                }
             }
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)

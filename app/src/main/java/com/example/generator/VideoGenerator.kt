@@ -160,6 +160,7 @@ class VideoGenerator {
         videoQuality: String = "Ultra",
         isRetry: Boolean = false,
         includeBasmalah: Boolean = true,
+        videoQuery: String? = null,
         onProgress: (String, Float) -> Unit,
         onComplete: (Uri) -> Unit,
         onError: (String) -> Unit
@@ -510,7 +511,7 @@ class VideoGenerator {
                         "rain+flowers+nature+aesthetic",
                         "sunset+bike+nature+dark"
                     )
-                    val chosenQuery = pexelsQueries.random()
+                    val chosenQuery = if (!videoQuery.isNullOrBlank()) videoQuery else pexelsQueries.random()
                     val requestUrl = "https://api.pexels.com/videos/search?query=$chosenQuery&orientation=portrait&per_page=30"
                     val request = Request.Builder()
                         .url(requestUrl)
@@ -618,7 +619,7 @@ class VideoGenerator {
                         "rain+nature+aesthetic",
                         "sunset+bike+nature+dark"
                     )
-                    val chosenPixabayQuery = pixabayQueries.random()
+                    val chosenPixabayQuery = if (!videoQuery.isNullOrBlank()) videoQuery else pixabayQueries.random()
                     val request = Request.Builder()
                         .url("https://pixabay.com/api/videos/?key=$pixabayApiKey&q=$chosenPixabayQuery&orientation=vertical&per_page=30")
                         .build()

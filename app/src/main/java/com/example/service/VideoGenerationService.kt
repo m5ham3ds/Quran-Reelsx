@@ -73,6 +73,7 @@ class VideoGenerationService : Service() {
         val pexelsApiKey = intent.getStringExtra("pexelsApiKey") ?: ""
         val videoQuality = intent.getStringExtra("videoQuality") ?: "Ultra"
         val isRetry = intent.getBooleanExtra("isRetry", false)
+        val videoQuery = intent.getStringExtra("videoQuery")
 
         scope.launch {
             val settingsManager = com.example.settings.SettingsManager(this@VideoGenerationService)
@@ -105,6 +106,7 @@ class VideoGenerationService : Service() {
                     videoQuality = videoQuality,
                     isRetry = isRetry,
                     includeBasmalah = includeBasmalah,
+                    videoQuery = videoQuery,
                     onProgress = { msg, progress ->
                         _serviceState.value = ReelState.Loading(msg, progress)
                         updateNotificationProgress(msg, progress, isArabic)

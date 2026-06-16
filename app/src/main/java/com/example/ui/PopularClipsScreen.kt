@@ -1,6 +1,9 @@
 package com.example.ui
 
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
@@ -31,6 +34,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import com.example.settings.SettingsManager
 import com.example.ui.ReelState
 import com.example.ui.ReelViewModel
@@ -51,7 +58,8 @@ data class CuratedClip(
     val ayahStart: Int,
     val ayahEnd: Int,
     val audioUrl: String,
-    val category: String
+    val category: String,
+    val videoQuery: String? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,7 +72,29 @@ fun PopularClipsScreen(
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsState()
     
-    // Core built-in Curated database
+    // 1. Audio Preview Player Setup
+    val previewPlayer = remember { ExoPlayer.Builder(context).build() }
+    var playingClipId by remember { mutableStateOf<String?>(null) }
+    var isPreviewLoading by remember { mutableStateOf(false) }
+
+    DisposableEffect(previewPlayer) {
+        onDispose {
+            previewPlayer.release()
+        }
+    }
+
+    LaunchedEffect(previewPlayer) {
+        previewPlayer.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isPreviewLoading = (playbackState == androidx.media3.common.Player.STATE_BUFFERING)
+                if (playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                    playingClipId = null
+                }
+            }
+        })
+    }
+
+    // Core built-in Curated database with dynamic video search terms matching custom recitations
     val baseClipsList = remember {
         mutableStateListOf(
             CuratedClip(
@@ -75,7 +105,8 @@ fun PopularClipsScreen(
                 ayahStart = 1,
                 ayahEnd = 13,
                 audioUrl = "https://download.tvquran.com/download/recitations/372/303/055.mp3",
-                category = "طمأنينة"
+                category = "طمأنينة",
+                videoQuery = "quran+recitation"
             ),
             CuratedClip(
                 id = "clip_mossad_sajdah",
@@ -85,7 +116,8 @@ fun PopularClipsScreen(
                 ayahStart = 1,
                 ayahEnd = 9,
                 audioUrl = "https://download.tvquran.com/download/recitations/372/303/032.mp3",
-                category = "طمأنينة"
+                category = "طمأنينة",
+                videoQuery = "muslim+praying+mosque"
             ),
             CuratedClip(
                 id = "clip_mossad_mulk",
@@ -95,7 +127,8 @@ fun PopularClipsScreen(
                 ayahStart = 1,
                 ayahEnd = 5,
                 audioUrl = "https://download.tvquran.com/download/recitations/372/303/067.mp3",
-                category = "سكينة"
+                category = "سكينة",
+                videoQuery = "islamic+man+reading+quran"
             ),
             CuratedClip(
                 id = "clip_mossad_anbiya",
@@ -105,7 +138,8 @@ fun PopularClipsScreen(
                 ayahStart = 87,
                 ayahEnd = 88,
                 audioUrl = "https://download.tvquran.com/download/recitations/372/303/021.mp3",
-                category = "دعاء"
+                category = "دعاء",
+                videoQuery = "kaaba+mecca+aesthetic"
             ),
             CuratedClip(
                 id = "clip_mossad_infitar",
@@ -115,7 +149,8 @@ fun PopularClipsScreen(
                 ayahStart = 6,
                 ayahEnd = 12,
                 audioUrl = "https://download.tvquran.com/download/recitations/372/303/082.mp3",
-                category = "خشوع"
+                category = "خشوع",
+                videoQuery = "rainy+window+aesthetic"
             ),
             CuratedClip(
                 id = "clip_sobhi_isra",
@@ -125,7 +160,8 @@ fun PopularClipsScreen(
                 ayahStart = 9,
                 ayahEnd = 11,
                 audioUrl = "https://server11.mp3quran.net/sobhi/017.mp3",
-                category = "طمأنينة"
+                category = "طمأنينة",
+                videoQuery = "reading+quran+man"
             ),
             CuratedClip(
                 id = "clip_sobhi_kahf",
@@ -135,7 +171,8 @@ fun PopularClipsScreen(
                 ayahStart = 46,
                 ayahEnd = 49,
                 audioUrl = "https://server11.mp3quran.net/sobhi/018.mp3",
-                category = "سكينة"
+                category = "سكينة",
+                videoQuery = "nature+waterfall+mountains"
             ),
             CuratedClip(
                 id = "clip_alafasy_hashr",
@@ -145,7 +182,8 @@ fun PopularClipsScreen(
                 ayahStart = 21,
                 ayahEnd = 24,
                 audioUrl = "https://server8.mp3quran.net/afs/059.mp3",
-                category = "خشوع"
+                category = "خشوع",
+                videoQuery = "mosque+interior+lighting"
             )
         )
     }
@@ -220,6 +258,317 @@ fun PopularClipsScreen(
                         tint = LuxuryGold,
                         modifier = Modifier.size(24.dp)
                     )
+                }
+            }
+        }
+
+        // 2. Active Popular Clip Video Generation Progress UI Controller
+        val isActivePopular = viewModel.activeReciterId.startsWith("popular|")
+        
+        AnimatedVisibility(
+            visible = state !is ReelState.Idle && isActivePopular,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
+            var showCancelConfirmationDialog by remember { mutableStateOf(false) }
+            val isGenerationPaused by viewModel.isGenerationPausedFlow.collectAsState()
+            
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CardBg),
+                border = BorderStroke(1.dp, LuxuryGold.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    when (state) {
+                        is ReelState.Error -> {
+                            Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(40.dp))
+                            Text(
+                                text = (state as ReelState.Error).message,
+                                color = MaterialTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Button(
+                                    onClick = { viewModel.resumeGeneration(context) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f).height(48.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = if (isArabic) "إعادة المحاولة والمتابعة" else "Retry & Resume",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                    }
+                                }
+                                
+                                Button(
+                                    onClick = { viewModel.reset() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = BorderColor, contentColor = TextSoftColor),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f).height(48.dp)
+                                ) {
+                                    Text(
+                                        text = if (isArabic) "إلغاء وتجاوز" else "Dismiss",
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
+                        is ReelState.Loading -> {
+                            val loadingState = state as ReelState.Loading
+                            CircularProgressIndicator(color = LuxuryGold, strokeWidth = 3.dp)
+                            Text(
+                                text = loadingState.message,
+                                color = TextSoftColor,
+                                fontWeight = FontWeight.Medium,
+                                textAlign = TextAlign.Center
+                            )
+                            LinearProgressIndicator(
+                                progress = { loadingState.progress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = LuxuryGold,
+                                trackColor = BorderColor
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = { viewModel.togglePauseGeneration() },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isGenerationPaused) LuxuryGold else BorderColor,
+                                        contentColor = if (isGenerationPaused) ScreenBg else Color.White
+                                    ),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isGenerationPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isGenerationPaused) {
+                                            if (isArabic) "استئناف المؤقت" else "Resume Video"
+                                        } else {
+                                            if (isArabic) "إيقاف المؤقت" else "Pause Video"
+                                        },
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                
+                                Button(
+                                    onClick = { showCancelConfirmationDialog = true },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0x11EF5350),
+                                        contentColor = Color(0xFFEF5350)
+                                    ),
+                                    border = BorderStroke(1.dp, Color(0x33EF5350)),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = if (isArabic) "إلغاء العملية" else "Cancel Process",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            if (showCancelConfirmationDialog) {
+                                AlertDialog(
+                                    onDismissRequest = { showCancelConfirmationDialog = false },
+                                    title = {
+                                        Text(
+                                            text = if (isArabic) "تأكيد إلغاء عملية المقطع الرائج" else "Confirm Cancel",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    },
+                                    text = {
+                                        Text(
+                                            text = if (isArabic) "هل أنت متأكد من رغبتك في إلغاء عملية تصميم وإنتاج هذا المقطع الرائج؟" else "Are you sure you want to cancel generating this clip?",
+                                            color = TextSoftColor
+                                        )
+                                    },
+                                    confirmButton = {
+                                         Button(
+                                             onClick = {
+                                                 showCancelConfirmationDialog = false
+                                                 viewModel.cancelGeneration()
+                                             },
+                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF5350), contentColor = Color.White),
+                                             shape = RoundedCornerShape(10.dp)
+                                         ) {
+                                             Text(text = if (isArabic) "نعم، إلغاء" else "Yes, Cancel", fontWeight = FontWeight.Bold)
+                                         }
+                                    },
+                                    dismissButton = {
+                                         Button(
+                                             onClick = { showCancelConfirmationDialog = false },
+                                             colors = ButtonDefaults.buttonColors(containerColor = BorderColor, contentColor = TextSoftColor),
+                                             shape = RoundedCornerShape(10.dp)
+                                         ) {
+                                             Text(text = if (isArabic) "تراجع" else "Keep Generating", fontWeight = FontWeight.Bold)
+                                         }
+                                    },
+                                    containerColor = ScreenBg,
+                                    shape = RoundedCornerShape(16.dp)
+                                )
+                            }
+                        }
+                        is ReelState.Success -> {
+                            val successState = state as ReelState.Success
+                            val uri = successState.uri
+                            val generatedMeta = successState.generatedMeta
+                            
+                            Text(
+                                text = if (isArabic) "اكتمل مونتاج مقطع الشيخ الرائج بنجاح باهر! 🎉" else "Trending clip created successfully! 🎉",
+                                color = LuxuryGold,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                fontSize = 15.sp
+                            )
+
+                            val successPlayer = remember(uri) {
+                                ExoPlayer.Builder(context).build().apply {
+                                    setMediaItem(MediaItem.fromUri(uri))
+                                    prepare()
+                                    playWhenReady = true
+                                }
+                            }
+                            DisposableEffect(successPlayer) {
+                                onDispose {
+                                    successPlayer.release()
+                                }
+                            }
+
+                            AndroidView(
+                                factory = { ctx ->
+                                    PlayerView(ctx).apply {
+                                        player = successPlayer
+                                        useController = true
+                                    }
+                                },
+                                update = { view ->
+                                    view.player = successPlayer
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(280.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color.Black)
+                            )
+
+                            // Clean description and hashtags metadata display card
+                            generatedMeta?.let { meta ->
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = ScreenBg),
+                                    border = BorderStroke(1.dp, BorderColor),
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = if (isArabic) "عنوان التيك توك والانستغرام المقترح :" else "Suggested Captions:",
+                                            color = LuxuryGold,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                        Text(
+                                            text = meta.tiktok?.description ?: "",
+                                            color = TextSoftColor,
+                                            fontSize = 12.sp
+                                        )
+                                        Text(
+                                            text = meta.tiktok?.hashtags ?: "",
+                                            color = LuxuryGold,
+                                            fontSize = 11.sp
+                                        )
+                                        
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Button(
+                                            onClick = {
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                val clipData = ClipData.newPlainText("Reel Caption", "${meta.tiktok?.description}\n${meta.tiktok?.hashtags}")
+                                                clipboard.setPrimaryClip(clipData)
+                                                Toast.makeText(context, if (isArabic) "تم نسخ الكابشن والهاشتاقات بنجاح!" else "Caption copied!", Toast.LENGTH_SHORT).show()
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = BorderColor, contentColor = TextSoftColor),
+                                            shape = RoundedCornerShape(8.dp),
+                                            modifier = Modifier.fillMaxWidth().height(36.dp)
+                                        ) {
+                                            Text(if (isArabic) "نسخ الكابشن بالكامل 📋" else "Copy Full Caption 📋", fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Button(
+                                    onClick = {
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "video/mp4"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(Intent.createChooser(shareIntent, if (isArabic) "مشاركة مقطع الشيخ الرائج" else "Share Trending Reel"))
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg),
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(if (isArabic) "مشاركة المقطع" else "Share Clip", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                }
+
+                                Button(
+                                    onClick = { viewModel.reset() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = BorderColor, contentColor = TextSoftColor),
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(if (isArabic) "إنهاء و تصفح" else "Close", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                }
+                            }
+                        }
+                        ReelState.Idle -> {}
+                    }
                 }
             }
         }
@@ -314,6 +663,7 @@ fun PopularClipsScreen(
         } else {
             filteredClips.forEach { clip ->
                 val isCurrentSelected = selectedClip?.id == clip.id
+                val isPlayingThis = playingClipId == clip.id
                 
                 Card(
                     shape = RoundedCornerShape(16.dp),
@@ -338,24 +688,63 @@ fun PopularClipsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                // CLICKABLE AUDIO PREVIEW HEADPHONE PIN COUTOUT
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(40.dp)
                                         .clip(CircleShape)
-                                        .background(LuxuryGold.copy(alpha = 0.15f)),
+                                        .background(if (isPlayingThis) LuxuryGold else LuxuryGold.copy(alpha = 0.15f))
+                                        .clickable {
+                                            if (isPlayingThis) {
+                                                previewPlayer.pause()
+                                                playingClipId = null
+                                            } else {
+                                                playingClipId = clip.id
+                                                isPreviewLoading = true
+                                                previewPlayer.stop()
+                                                previewPlayer.setMediaItem(MediaItem.fromUri(clip.audioUrl))
+                                                previewPlayer.prepare()
+                                                previewPlayer.play()
+                                            }
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(text = "🎧", fontSize = 16.sp)
+                                    if (isPlayingThis && isPreviewLoading) {
+                                        CircularProgressIndicator(
+                                            color = ScreenBg,
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = if (isPlayingThis) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                            contentDescription = if (isPlayingThis) "إيقاف مؤقت المعاينة الصوتية" else "تقديم سماع المعاينة الصوتية",
+                                            tint = if (isPlayingThis) ScreenBg else LuxuryGold,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
-                                    Text(
-                                        text = clip.reciter,
-                                        color = TextSoftColor,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = clip.reciter,
+                                            color = TextSoftColor,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Icon(
+                                            imageVector = Icons.Default.Headset,
+                                            contentDescription = null,
+                                            tint = if (isPlayingThis) LuxuryGold else TextMutedColor,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
                                     val surahName = SURAH_NAMES.getOrNull(clip.surah - 1) ?: "سورة ${clip.surah}"
                                     val rangeText = if (clip.ayahStart == clip.ayahEnd) "${clip.ayahStart}" else "${clip.ayahStart}-${clip.ayahEnd}"
                                     Text(
@@ -422,12 +811,17 @@ fun PopularClipsScreen(
                                 // Generate Trigger Button
                                 Button(
                                     onClick = {
+                                        // Stop any ongoing audio preview to prevent overlapping sounds
+                                        previewPlayer.stop()
+                                        playingClipId = null
+                                        
                                         viewModel.generate(
                                             context = context,
                                             surah = clip.surah,
                                             startAyah = clip.ayahStart,
                                             endAyah = clip.ayahEnd,
-                                            reciterId = "popular|" + clip.audioUrl
+                                            reciterId = "popular|" + clip.audioUrl,
+                                            videoQuery = clip.videoQuery
                                         )
                                         Toast.makeText(context, if (isArabic) "بدء المونتاج لـ ${clip.reciter}..." else "Starting production...", Toast.LENGTH_SHORT).show()
                                     },
@@ -476,6 +870,7 @@ fun PopularClipsScreen(
         var addEndStr by remember { mutableStateOf("1") }
         var addUrl by remember { mutableStateOf("") }
         var addCategory by remember { mutableStateOf("سكينة") }
+        var addVideoQuery by remember { mutableStateOf("") }
 
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
@@ -575,6 +970,19 @@ fun PopularClipsScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    OutlinedTextField(
+                        value = addVideoQuery,
+                        onValueChange = { addVideoQuery = it },
+                        label = { Text(if (isArabic) "كلمة بحث الخلفية (Pexels / Pixabay)" else "Background Video Query Override") },
+                        placeholder = { Text("e.g. quran+recitation") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = LuxuryGold,
+                            unfocusedBorderColor = BorderColor,
+                            focusedLabelColor = LuxuryGold
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
                     // Simple select category
                     Text(
                         text = if (isArabic) "التصنيف الروحي" else "Spiritual Theme",
@@ -628,7 +1036,8 @@ fun PopularClipsScreen(
                                     ayahStart = startNum,
                                     ayahEnd = endNum,
                                     audioUrl = addUrl,
-                                    category = addCategory
+                                    category = addCategory,
+                                    videoQuery = if (addVideoQuery.isBlank()) "quran+recitation" else addVideoQuery
                                 )
                             )
                             showAddDialog = false
