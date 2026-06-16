@@ -1155,11 +1155,13 @@ class VideoGenerator {
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Android VideoGenerator")
             .build()
         var retries = 0
+        var lastErrorUrlCode = 0
         while (retries < 3) {
             try {
                 val response = client.newCall(request).execute()
                 if (!response.isSuccessful) {
                     retries++
+                    lastErrorUrlCode = response.code
                     Thread.sleep(3000)
                     continue
                 }
@@ -1168,13 +1170,14 @@ class VideoGenerator {
                         input.copyTo(output)
                     }
                 }
-                break
+                return
             } catch (e: Exception) {
                 retries++
-                if (retries >= 3) throw Exception("فشل تحميل الملفات من الخادم بعد ٣ محاولات: ${e.message}")
+                if (retries >= 3) throw Exception("فشل تحميل الملفات من الخادم بعد ٣ محاولات لـ $url: ${e.message}")
                 Thread.sleep(3000)
             }
         }
+        throw Exception("الرابط غير متاح أو لا يمكن الوصول إليه. رمز الخطأ الأخير: $lastErrorUrlCode لـ $url")
     }
 
     private fun checkCancellationAndPause() {
