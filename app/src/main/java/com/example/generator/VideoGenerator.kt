@@ -25,7 +25,6 @@ import android.text.TextPaint
 import com.example.settings.SettingsManager
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
-import com.yausername.ffmpeg.FFmpeg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -183,8 +182,7 @@ class VideoGenerator {
 
         try {
             YoutubeDL.getInstance().init(context)
-            FFmpeg.getInstance().init(context)
-            SystemDiagnosticTracker.addLog("YOUTUBEDL", "تم تهيئة مكتبات Yt-dlp و FFmpeg بنجاح")
+            SystemDiagnosticTracker.addLog("YOUTUBEDL", "تم تهيئة مكتبة Yt-dlp بنجاح")
         } catch (e: Exception) {
             SystemDiagnosticTracker.addLog("YOUTUBEDL", "تحذير: قد تفشل تهيئة Yt-dlp - ${e.message}")
         }
