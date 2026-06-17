@@ -84,6 +84,14 @@ class GeminiMetaGenerator {
                 })
             }
             put("contents", countArray)
+            
+            // Add Google Search grounding to help Gemini fetch the YouTube video details if possible
+            put("tools", JSONArray().apply {
+                put(JSONObject().apply {
+                    put("googleSearch", JSONObject())
+                })
+            })
+            
             put("generationConfig", JSONObject().apply {
                 put("responseMimeType", "application/json")
                 put("temperature", 0.2)
