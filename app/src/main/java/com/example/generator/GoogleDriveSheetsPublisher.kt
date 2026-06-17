@@ -18,7 +18,15 @@ import java.util.Date
 import java.util.Locale
 
 class GoogleDriveSheetsPublisher(private val context: Context) {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            val request = chain.request().newBuilder()
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("Accept", "*/*")
+                .build()
+            chain.proceed(request)
+        }
+        .build()
     private val settingsManager = SettingsManager(context)
 
     companion object {

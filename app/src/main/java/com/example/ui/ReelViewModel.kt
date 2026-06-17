@@ -36,7 +36,15 @@ sealed class ReelState {
 }
 
 class ReelViewModel(application: Application) : AndroidViewModel(application) {
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .addInterceptor { chain ->
+            val request = chain.request().newBuilder()
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("Accept", "*/*")
+                .build()
+            chain.proceed(request)
+        }
+        .build()
     
     private val _uiState = MutableStateFlow<ReelState>(ReelState.Idle)
     val uiState: StateFlow<ReelState> = _uiState
@@ -67,6 +75,13 @@ class ReelViewModel(application: Application) : AndroidViewModel(application) {
                 val client = OkHttpClient.Builder()
                     .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
                     .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .addInterceptor { chain ->
+                        val request = chain.request().newBuilder()
+                            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                            .header("Accept", "*/*")
+                            .build()
+                        chain.proceed(request)
+                    }
                     .build()
                 
                 val maxCount = com.example.SURAH_COUNTS[surah] ?: 1

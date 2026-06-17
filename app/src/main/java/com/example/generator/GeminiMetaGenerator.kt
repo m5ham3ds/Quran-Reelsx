@@ -29,6 +29,13 @@ class GeminiMetaGenerator {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            val request = chain.request().newBuilder()
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                .header("Accept", "*/*")
+                .build()
+            chain.proceed(request)
+        }
         .build()
 
     suspend fun generateSocialMeta(
