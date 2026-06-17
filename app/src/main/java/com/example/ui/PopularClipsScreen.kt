@@ -973,6 +973,7 @@ fun PopularClipsScreen(
         var addStartStr by remember { mutableStateOf("1") }
         var addEndStr by remember { mutableStateOf("1") }
         var addUrl by remember { mutableStateOf("") }
+        var isYoutubeUrl by remember { mutableStateOf(false) }
         var addCategory by remember { mutableStateOf("سكينة") }
         var addVideoQuery by remember { mutableStateOf("") }
 
@@ -1065,7 +1066,7 @@ fun PopularClipsScreen(
                     OutlinedTextField(
                         value = addUrl,
                         onValueChange = { addUrl = it },
-                        label = { Text(if (isArabic) "رابط تيار الصوت المستمر (MP3)" else "Continuous MP3 Stream URL") },
+                        label = { Text(if (isArabic) "رابط مباشر (MP3) أو يوتيوب/تيك توك" else "Direct URL / Youtube / TikTok") },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = LuxuryGold,
                             unfocusedBorderColor = BorderColor,
@@ -1073,6 +1074,19 @@ fun PopularClipsScreen(
                         ),
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Checkbox(
+                            checked = isYoutubeUrl,
+                            onCheckedChange = { isYoutubeUrl = it },
+                            colors = CheckboxDefaults.colors(checkedColor = LuxuryGold)
+                        )
+                        Text(
+                            text = if (isArabic) "وهل الرابط عبر Youtube أو منصة أخرى(YT-DLP)؟" else "Is it a YouTube/other platform link (YT-DLP)?",
+                            color = TextSoftColor,
+                            fontSize = 12.sp
+                        )
+                    }
 
                     OutlinedTextField(
                         value = addVideoQuery,
@@ -1135,7 +1149,7 @@ fun PopularClipsScreen(
                                 CuratedClip(
                                     id = "clip_custom_${System.currentTimeMillis()}",
                                     reciter = addReciter,
-                                    reciterId = addUrl,
+                                    reciterId = if (isYoutubeUrl) "youtube|$addUrl" else addUrl,
                                     title = addTitle,
                                     surah = sNum,
                                     ayahStart = startNum,

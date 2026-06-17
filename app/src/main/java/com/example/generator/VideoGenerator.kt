@@ -23,6 +23,9 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import com.example.settings.SettingsManager
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
+import com.yausername.ffmpeg.FFmpeg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -177,6 +180,14 @@ class VideoGenerator {
         SystemDiagnosticTracker.clearLogs()
         SystemDiagnosticTracker.addLog("PROCESS_START", "بدء تصنيع مقطع الريدز الجديد (Start generate reel). السورة: $surah, البداية: $startAyah, النهاية: $endAyah, القارئ: $reciterId, الترجمة: $showTranslation")
         threadError = null
+
+        try {
+            YoutubeDL.getInstance().init(context)
+            FFmpeg.getInstance().init(context)
+            SystemDiagnosticTracker.addLog("YOUTUBEDL", "تم تهيئة مكتبات Yt-dlp و FFmpeg بنجاح")
+        } catch (e: Exception) {
+            SystemDiagnosticTracker.addLog("YOUTUBEDL", "تحذير: قد تفشل تهيئة Yt-dlp - ${e.message}")
+        }
         var videoCodec: MediaCodec? = null
         var muxer: MediaMuxer? = null
         var bgBitmap: Bitmap? = null
@@ -234,11 +245,16 @@ class VideoGenerator {
             
             val isPopularUIState = reciterId.startsWith("popular|")
             var isPopularUrlDownload = false
+            var isYoutubeUrlDownload = false
             var actualReciterId = reciterId
             
             if (isPopularUIState) {
                 val suffix = reciterId.substringAfter("popular|")
-                if (suffix.startsWith("http") || suffix.startsWith("https")) {
+                if (suffix.startsWith("youtube|")) {
+                    isPopularUrlDownload = true
+                    isYoutubeUrlDownload = true
+                    actualReciterId = suffix.substringAfter("youtube|")
+                } else if (suffix.startsWith("http") || suffix.startsWith("https")) {
                     isPopularUrlDownload = true
                     actualReciterId = suffix
                 } else {
@@ -302,7 +318,11 @@ class VideoGenerator {
                 
                 val destFile = File(context.cacheDir, "popular_clip_${surah}_${startAyah}_${endAyah}.mp3")
                 SystemDiagnosticTracker.addLog("DOWNLOAD", "تحميل المقطع المشهور من الرابط: $audioUrl")
-                downloadAudio(audioUrl, destFile)
+                if (isYoutubeUrlDownload) {
+                    downloadMediaWithYtDlp(audioUrl, destFile)
+                } else {
+                    downloadAudio(audioUrl, destFile)
+                }
                 SystemDiagnosticTracker.addLog("DOWNLOAD", "تم تحميل المقطع الرائج بنجاح، الحجم: ${destFile.length()} بايت")
 
                 // Fetch combined texts
@@ -1177,6 +1197,36 @@ class VideoGenerator {
         val surahObj = data.getJSONObject("surah")
         val surahName = surahObj.getString("name")
         return Triple(data.getString("text"), data.getInt("number"), surahName)
+    }
+
+    private fun downloadMediaWithYtDlp(url: String, destFile: File) {
+        synchronized(destFile.absolutePath.intern()) {
+            if (destFile.exists() && destFile.length() > 0) return
+            
+            val tmpFile = File(destFile.absolutePath + ".tmp_${System.currentTimeMillis()}.mp3")
+            try {
+                SystemDiagnosticTracker.addLog("YOUTUBEDL", "بدء جلب الوسائط بواسطة yt-dlp من الرابط: $url")
+                val request = YoutubeDLRequest(url)
+                request.addOption("-f", "bestaudio")
+                request.addOption("-x")
+                request.addOption("--audio-format", "mp3")
+                request.addOption("-o", tmpFile.absolutePath)
+                
+                YoutubeDL.getInstance().execute(request) { progress, etaInSeconds, line ->
+                    // We can log progress if we want, but it's fine
+                }
+                
+                if (tmpFile.exists() && tmpFile.length() > 0) {
+                    tmpFile.renameTo(destFile)
+                } else {
+                    throw java.lang.Exception("yt-dlp لم يقم بإنتاج ملف صوتي صالح")
+                }
+            } catch (e: Exception) {
+                SystemDiagnosticTracker.addLog("ERROR", "فشل جلب الوسائط بواسطة yt-dlp: ${e.message}")
+                if (tmpFile.exists()) tmpFile.delete()
+                throw java.lang.Exception("تعذر استخراج الصوت من الرابط: ${e.message}")
+            }
+        }
     }
 
     private fun downloadAudio(url: String, destFile: File) {
