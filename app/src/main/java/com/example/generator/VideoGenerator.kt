@@ -783,11 +783,16 @@ class VideoGenerator {
                                 buf.position(bufferInfo.offset)
                                 buf.limit(bufferInfo.offset + bufferInfo.size)
                                 synchronized(finalMuxer) {
+                                    if (bufferInfo.presentationTimeUs < 0L) bufferInfo.presentationTimeUs = 0L
                                     if (bufferInfo.presentationTimeUs <= lastWrittenVideoPts) {
-                                        bufferInfo.presentationTimeUs = lastWrittenVideoPts + 100L
+                                        bufferInfo.presentationTimeUs = lastWrittenVideoPts + 10L
                                     }
                                     lastWrittenVideoPts = bufferInfo.presentationTimeUs
-                                    finalMuxer.writeSampleData(videoTrackIdx, buf, bufferInfo)
+                                    try {
+                                        finalMuxer.writeSampleData(videoTrackIdx, buf, bufferInfo)
+                                    } catch (e: Exception) {
+                                        SystemDiagnosticTracker.addLog("TRANSCODE_WARN", "Video muxer error: ${e.message}")
+                                    }
                                 }
                             }
                             encoder.releaseOutputBuffer(outIdx, false)
@@ -848,7 +853,12 @@ class VideoGenerator {
                                 buf.position(0)
                                 buf.limit(size)
                                 synchronized(finalMuxer) {
-                                    finalMuxer.writeSampleData(audioTrackIdx, buf, info)
+                                    if (info.presentationTimeUs < 0) info.presentationTimeUs = 0L
+                                    try {
+                                        finalMuxer.writeSampleData(audioTrackIdx, buf, info)
+                                    } catch (e: Exception) {
+                                        SystemDiagnosticTracker.addLog("TRANSCODE_WARN", "Audio muxer error: ${e.message}")
+                                    }
                                 }
                             }
                             ext.advance()
@@ -1281,14 +1291,26 @@ class VideoGenerator {
                         if (encoderBufferInfo.size > 0 && outTrackIdx >= 0) {
                             encBuf.position(encoderBufferInfo.offset)
                             encBuf.limit(encoderBufferInfo.offset + encoderBufferInfo.size)
-                            if (firstPts == -1L) firstPts = encoderBufferInfo.presentationTimeUs
-                            encoderBufferInfo.presentationTimeUs -= firstPts
+                            if (firstPts == -1L && encoderBufferInfo.presentationTimeUs > 0) {
+                                firstPts = encoderBufferInfo.presentationTimeUs
+                            }
+                            if (firstPts != -1L) {
+                                encoderBufferInfo.presentationTimeUs -= firstPts
+                            }
+                            if (encoderBufferInfo.presentationTimeUs < 0) {
+                                encoderBufferInfo.presentationTimeUs = 0L
+                            }
                             
                             if (encoderBufferInfo.presentationTimeUs <= lastWrittenPts) {
-                                encoderBufferInfo.presentationTimeUs = lastWrittenPts + 100L
+                                encoderBufferInfo.presentationTimeUs = lastWrittenPts + 10L
                             }
                             lastWrittenPts = encoderBufferInfo.presentationTimeUs
-                            muxer.writeSampleData(outTrackIdx, encBuf, encoderBufferInfo)
+                            
+                            try {
+                                muxer.writeSampleData(outTrackIdx, encBuf, encoderBufferInfo)
+                            } catch (e: Exception) {
+                                SystemDiagnosticTracker.addLog("TRANSCODE_WARN", "تصحيح عينة مفقودة: ${e.message}")
+                            }
                         }
                         if ((encoderBufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
                             isEncoderEOS = true
