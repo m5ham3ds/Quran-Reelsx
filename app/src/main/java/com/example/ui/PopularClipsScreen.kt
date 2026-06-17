@@ -59,6 +59,7 @@ import com.example.TextMutedColor
 data class CuratedClip(
     val id: String,
     val reciter: String,
+    val reciterId: String,
     val title: String,
     val surah: Int,
     val ayahStart: Int,
@@ -124,88 +125,96 @@ fun PopularClipsScreen(
             CuratedClip(
                 id = "clip_yasser_rahman",
                 reciter = "ياسر الدوسري",
+                reciterId = "ar.yasserdossari",
                 title = "الرحمن • علّم القرآن • خلق الإنسان",
                 surah = 55,
                 ayahStart = 1,
                 ayahEnd = 13,
-                audioUrl = "https://server11.mp3quran.net/yasser/055.mp3",
+                audioUrl = "https://cdn.islamic.network/quran/audio/128/ar.yasserdossari/4901.mp3",
                 category = "طمأنينة",
                 videoQuery = "quran+recitation"
             ),
             CuratedClip(
                 id = "clip_yasser_sajdah",
                 reciter = "ياسر الدوسري",
+                reciterId = "ar.yasserdossari",
                 title = "تنزيل الكتاب لا ريب فيه من رب العالمين",
                 surah = 32,
                 ayahStart = 1,
                 ayahEnd = 9,
-                audioUrl = "https://server11.mp3quran.net/yasser/032.mp3",
+                audioUrl = "https://cdn.islamic.network/quran/audio/128/ar.yasserdossari/3504.mp3",
                 category = "طمأنينة",
                 videoQuery = "muslim+praying+mosque"
             ),
             CuratedClip(
                 id = "clip_yasser_mulk",
                 reciter = "ياسر الدوسري",
+                reciterId = "ar.yasserdossari",
                 title = "تبارك الذي بيده الملك وهو على كل شيء قدير",
                 surah = 67,
                 ayahStart = 1,
                 ayahEnd = 5,
-                audioUrl = "https://server11.mp3quran.net/yasser/067.mp3",
+                audioUrl = "https://cdn.islamic.network/quran/audio/128/ar.yasserdossari/5242.mp3",
                 category = "سكينة",
                 videoQuery = "islamic+man+reading+quran"
             ),
             CuratedClip(
                 id = "clip_yasser_anbiya",
                 reciter = "ياسر الدوسري",
+                reciterId = "ar.yasserdossari",
                 title = "دعاء ذي النون - لا إله إلا أنت سبحانك إني كنت من الظالمين",
                 surah = 21,
                 ayahStart = 87,
                 ayahEnd = 88,
-                audioUrl = "https://server11.mp3quran.net/yasser/021.mp3",
+                audioUrl = "https://cdn.islamic.network/quran/audio/128/ar.yasserdossari/2570.mp3",
                 category = "دعاء",
                 videoQuery = "kaaba+mecca+aesthetic"
             ),
             CuratedClip(
                 id = "clip_yasser_infitar",
                 reciter = "ياسر الدوسري",
+                reciterId = "ar.yasserdossari",
                 title = "يا أيها الإنسان ما غرك بربك الكريم",
                 surah = 82,
                 ayahStart = 6,
                 ayahEnd = 12,
-                audioUrl = "https://server11.mp3quran.net/yasser/082.mp3",
+                audioUrl = "https://cdn.islamic.network/quran/audio/128/ar.yasserdossari/5835.mp3",
                 category = "خشوع",
                 videoQuery = "rainy+window+aesthetic"
             ),
             CuratedClip(
-                id = "clip_sobhi_isra",
-                reciter = "إسلام صبحي",
+                id = "clip_maher_isra",
+                reciter = "ماهر المعيقلي",
+                reciterId = "ar.mahermuaiqly",
                 title = "إن هذا القرآن يهدي للتي هي أقوم ويبشر المؤمنين",
                 surah = 17,
                 ayahStart = 9,
                 ayahEnd = 11,
-                audioUrl = "https://server14.mp3quran.net/islam/Rewayat-Hafs-A-n-Assem/017.mp3",
+                audioUrl = "https://cdn.islamic.network/quran/audio/128/ar.mahermuaiqly/2038.mp3",
                 category = "طمأنينة",
                 videoQuery = "reading+quran+man"
             ),
             CuratedClip(
-                id = "clip_sobhi_kahf",
-                reciter = "إسلام صبحي",
+                id = "clip_maher_kahf",
+                reciter = "ماهر المعيقلي",
+                reciterId = "ar.mahermuaiqly",
                 title = "المال والبنون زينة الحياة الدنيا والباقيات الصالحات",
                 surah = 18,
                 ayahStart = 46,
                 ayahEnd = 49,
-                audioUrl = "https://server14.mp3quran.net/islam/Rewayat-Hafs-A-n-Assem/018.mp3",
+                audioUrl = "https://cdn.islamic.network/quran/audio/128/ar.mahermuaiqly/2186.mp3",
                 category = "سكينة",
                 videoQuery = "nature+waterfall+mountains"
             ),
             CuratedClip(
                 id = "clip_alafasy_hashr",
                 reciter = "مشاري العفاسي",
+                reciterId = "ar.alafasy",
                 title = "لو أنزلنا هذا القرآن على جبل لرأيته خاشعاً متصدعاً",
                 surah = 59,
                 ayahStart = 21,
                 ayahEnd = 24,
-                audioUrl = "https://server8.mp3quran.net/afs/059.mp3",
+                audioUrl = "https://cdn.islamic.network/quran/audio/128/ar.alafasy/5147.mp3",
                 category = "خشوع",
                 videoQuery = "mosque+interior+lighting"
             )
@@ -915,7 +924,7 @@ fun PopularClipsScreen(
                                             surah = clip.surah,
                                             startAyah = clip.ayahStart,
                                             endAyah = clip.ayahEnd,
-                                            reciterId = "popular|" + clip.audioUrl,
+                                            reciterId = "popular|" + clip.reciterId,
                                             videoQuery = clip.videoQuery
                                         )
                                         Toast.makeText(context, if (isArabic) "بدء المونتاج لـ ${clip.reciter}..." else "Starting production...", Toast.LENGTH_SHORT).show()
@@ -1126,6 +1135,7 @@ fun PopularClipsScreen(
                                 CuratedClip(
                                     id = "clip_custom_${System.currentTimeMillis()}",
                                     reciter = addReciter,
+                                    reciterId = addUrl,
                                     title = addTitle,
                                     surah = sNum,
                                     ayahStart = startNum,

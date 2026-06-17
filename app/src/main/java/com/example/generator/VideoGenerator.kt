@@ -232,18 +232,30 @@ class VideoGenerator {
                 SystemDiagnosticTracker.addLog("FONT", "فشل تحميل الخطوط المخصصة: ${e.message}")
             }
             
-            val isPopular = reciterId.startsWith("popular|")
+            val isPopularUIState = reciterId.startsWith("popular|")
+            var isPopularUrlDownload = false
+            var actualReciterId = reciterId
+            
+            if (isPopularUIState) {
+                val suffix = reciterId.substringAfter("popular|")
+                if (suffix.startsWith("http") || suffix.startsWith("https")) {
+                    isPopularUrlDownload = true
+                    actualReciterId = suffix
+                } else {
+                    actualReciterId = suffix
+                }
+            }
             
             // Optional: Prepend Basmalah (بسم الله الرحمن الرحيم) as a separate verse/card
-            if (includeBasmalah && surah != 1 && surah != 9 && !isPopular) {
+            if (includeBasmalah && surah != 1 && surah != 9 && !isPopularUrlDownload) {
                 SystemDiagnosticTracker.addLog("BASMALAH", "تهيئة البسملة المباركة (Basmalah required for surah $surah)")
                 onProgress(if (isArabic) "جاري تهيئة البسملة المباركة..." else "Initializing blessed Basmalah...", 0.02f)
                 try {
                     val basmalahText = "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ"
                     val basmalahTranslation = if (showTranslation) "In the name of Allah, the Entirely Merciful, the Especially Merciful" else null
                     
-                    val audioFileName = "${reciterId}_basmalah.mp3"
-                    val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/1.mp3" // Universal Basmalah is Surah 1 Ayah 1 of the chosen reciter
+                    val audioFileName = "${actualReciterId}_basmalah.mp3"
+                    val url = "https://cdn.islamic.network/quran/audio/64/$actualReciterId/1.mp3" // Universal Basmalah is Surah 1 Ayah 1 of the chosen reciter
                     val destFile = File(context.cacheDir, audioFileName)
                     
                     SystemDiagnosticTracker.addLog("DOWNLOAD", "تحميل صوت البسملة من الرابط: $url")
@@ -254,7 +266,7 @@ class VideoGenerator {
                     val alignedSegments = alignWithWhisperX(destFile, basmalahText)
                     SystemDiagnosticTracker.addLog("ALIGNMENT", "تمت مواءمة البسملة بنجاح، عدد الكلمات: ${alignedSegments.size}")
                     
-                    val aacFileName = "${reciterId}_basmalah_transcoded.m4a"
+                    val aacFileName = "${actualReciterId}_basmalah_transcoded.m4a"
                     val aacFile = File(context.cacheDir, aacFileName)
                     SystemDiagnosticTracker.addLog("TRANSCODE", "تحويل صيغة صوت البسملة إلى AAC/M4A لضمان توافقية الدمج")
                     val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
@@ -284,8 +296,8 @@ class VideoGenerator {
                 }
             }
             
-            if (isPopular) {
-                val audioUrl = reciterId.substringAfter("popular|")
+            if (isPopularUrlDownload) {
+                val audioUrl = actualReciterId
                 onProgress(if (isArabic) "جاري تحميل مراجع المقطع الرائج..." else "Downloading popular clip audio...", 0.05f)
                 
                 val destFile = File(context.cacheDir, "popular_clip_${surah}_${startAyah}_${endAyah}.mp3")
@@ -450,8 +462,8 @@ class VideoGenerator {
                     }
                 }
 
-                val audioFileName = "${reciterId}_${surah}_${ayah}.mp3"
-                val url = "https://cdn.islamic.network/quran/audio/64/$reciterId/$globalAyahNumber.mp3"
+                val audioFileName = "${actualReciterId}_${surah}_${ayah}.mp3"
+                val url = "https://cdn.islamic.network/quran/audio/64/$actualReciterId/$globalAyahNumber.mp3"
                 val destFile = File(context.cacheDir, audioFileName)
                 
                 SystemDiagnosticTracker.addLog("DOWNLOAD", "تحميل تلاوة الآية $ayah من الرابط: $url")
@@ -464,7 +476,7 @@ class VideoGenerator {
                 SystemDiagnosticTracker.addLog("ALIGNMENT", "تمت مواءمة الآية $ayah بالكامل بنجاح. عدد الكلمات المسترجعة: ${alignedSegments.size}")
                 
                 onProgress(if (isArabic) "جاري ترميز ملف الصوت بدقة سينمائية..." else "Encoding audio block dynamically...", 0.12f + (i * 0.2f / totalAyahs))
-                val aacFileName = "${reciterId}_${surah}_${ayah}_transcoded.m4a"
+                val aacFileName = "${actualReciterId}_${surah}_${ayah}_transcoded.m4a"
                 val aacFile = File(context.cacheDir, aacFileName)
                 SystemDiagnosticTracker.addLog("TRANSCODE", "تحويل ترميز الملف الصوتي للآية $ayah إلى AAC سينمائي")
                 val timeline = transcodeMp3ToAac(destFile.absolutePath, aacFile.absolutePath)
