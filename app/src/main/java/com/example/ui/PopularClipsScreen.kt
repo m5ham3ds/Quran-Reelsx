@@ -1089,37 +1089,6 @@ fun PopularClipsScreen(
                         )
                     }
 
-                    if (isYoutubeUrl && addUrl.isNotBlank()) {
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    try {
-                                        val generator = com.example.generator.GeminiMetaGenerator()
-                                        Toast.makeText(context, if (isArabic) "جاري جلب المعلومات عبر Gemini..." else "Fetching AI info...", Toast.LENGTH_SHORT).show()
-                                        val result = generator.analyzeClipUrl(context, addUrl)
-                                        if (result != null) {
-                                            addSurahStr = result.surah.toString()
-                                            addStartStr = result.startAyah.toString()
-                                            addEndStr = result.endAyah.toString()
-                                            if (result.reciterName.isNotBlank() && result.reciterName != "Unknown") {
-                                                addReciter = result.reciterName
-                                            }
-                                            Toast.makeText(context, if (isArabic) "تم الجلب بنجاح!" else "Successfully fetched info!", Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            Toast.makeText(context, if (isArabic) "فشل في التعرف على المقطع، جرب يدوياً" else "AI failed to recognize, enter manually", Toast.LENGTH_LONG).show()
-                                        }
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold.copy(alpha = 0.8f)),
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                        ) {
-                            Text(if (isArabic) "✨ استخراج المعلومات بـ Gemini (تلقائي)" else "✨ Auto-fill with Gemini AI", color = ScreenBg)
-                        }
-                    }
-
                     OutlinedTextField(
                         value = addVideoQuery,
                         onValueChange = { addVideoQuery = it },
@@ -1170,34 +1139,97 @@ fun PopularClipsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val sNum = addSurahStr.toIntOrNull() ?: 1
-                        val startNum = addStartStr.toIntOrNull() ?: 1
-                        val endNum = addEndStr.toIntOrNull() ?: 1
-                        
-                        if (addReciter.isBlank() || addTitle.isBlank() || addUrl.isBlank()) {
-                            Toast.makeText(context, if (isArabic) "يرجى ملء جميع الحقول العامة والرابط!" else "Fill all fields", Toast.LENGTH_SHORT).show()
+                        if (addUrl.isBlank()) {
+                            Toast.makeText(context, if (isArabic) "يرجى ملء الرابط!" else "Please provide link", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        if (isYoutubeUrl) {
+                            val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+                            val network = cm.activeNetwork
+                            val caps = cm.getNetworkCapabilities(network)
+                            val isOnline = caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+                            if (!isOnline) {
+                                Toast.makeText(context, if (isArabic) "الرجاء التأكد من الاتصال بالانترنت" else "Please check internet connection", Toast.LENGTH_LONG).show()
+                                return@Button
+                            }
+                            
+                            scope.launch {
+                                try {
+                                    Toast.makeText(context, if (isArabic) "جاري جلب المعلومات من خلال Gemini..." else "Fetching AI info...", Toast.LENGTH_LONG).show()
+                                    val generator = com.example.generator.GeminiMetaGenerator()
+                                    val result = generator.analyzeClipUrl(context, addUrl)
+                                    
+                                    if (result != null) {
+                                        addSurahStr = result.surah.toString()
+                                        addStartStr = result.startAyah.toString()
+                                        addEndStr = result.endAyah.toString()
+                                        if (result.reciterName.isNotBlank() && result.reciterName != "Unknown") {
+                                            addReciter = result.reciterName
+                                        }
+                                    } else {
+                                        Toast.makeText(context, if (isArabic) "فشل في التعرف على المقطع، سنستخدم البيانات الحالية" else "AI failed, saving current data", Toast.LENGTH_SHORT).show()
+                                    }
+                                    
+                                    if (addTitle.isBlank()) {
+                                        addTitle = "تلاوة - ${addReciter.ifBlank { "يوتيوب" }}"
+                                    }
+                                    
+                                    baseClipsList.add(
+                                        CuratedClip(
+                                            id = "clip_custom_${System.currentTimeMillis()}",
+                                            reciter = addReciter.ifBlank { "مقرئ Youtube" },
+                                            reciterId = "youtube|$addUrl",
+                                            title = addTitle,
+                                            surah = addSurahStr.toIntOrNull() ?: 1,
+                                            ayahStart = addStartStr.toIntOrNull() ?: 1,
+                                            ayahEnd = addEndStr.toIntOrNull() ?: 1,
+                                            audioUrl = addUrl,
+                                            category = addCategory,
+                                            videoQuery = if (addVideoQuery.isBlank()) "quran+recitation" else addVideoQuery
+                                        )
+                                    )
+                                    showAddDialog = false
+                                    Toast.makeText(context, if (isArabic) "تمت إضافة المقطع بنجاح!" else "Clip added successfully", Toast.LENGTH_SHORT).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                         } else {
-                            baseClipsList.add(
-                                CuratedClip(
-                                    id = "clip_custom_${System.currentTimeMillis()}",
-                                    reciter = addReciter,
-                                    reciterId = if (isYoutubeUrl) "youtube|$addUrl" else addUrl,
-                                    title = addTitle,
-                                    surah = sNum,
-                                    ayahStart = startNum,
-                                    ayahEnd = endNum,
-                                    audioUrl = addUrl,
-                                    category = addCategory,
-                                    videoQuery = if (addVideoQuery.isBlank()) "quran+recitation" else addVideoQuery
+                            val sNum = addSurahStr.toIntOrNull() ?: 1
+                            val startNum = addStartStr.toIntOrNull() ?: 1
+                            val endNum = addEndStr.toIntOrNull() ?: 1
+                            
+                            if (addReciter.isBlank() || addTitle.isBlank()) {
+                                Toast.makeText(context, if (isArabic) "يرجى ملء جميع الحقول العامة والرابط!" else "Fill all fields", Toast.LENGTH_SHORT).show()
+                            } else {
+                                baseClipsList.add(
+                                    CuratedClip(
+                                        id = "clip_custom_${System.currentTimeMillis()}",
+                                        reciter = addReciter,
+                                        reciterId = addUrl,
+                                        title = addTitle,
+                                        surah = sNum,
+                                        ayahStart = startNum,
+                                        ayahEnd = endNum,
+                                        audioUrl = addUrl,
+                                        category = addCategory,
+                                        videoQuery = if (addVideoQuery.isBlank()) "quran+recitation" else addVideoQuery
+                                    )
                                 )
-                            )
-                            showAddDialog = false
-                            Toast.makeText(context, if (isArabic) "تمت إضافة المقطع الرائج لقائمتك بنجاح!" else "Clip added successfully", Toast.LENGTH_SHORT).show()
+                                showAddDialog = false
+                                Toast.makeText(context, if (isArabic) "تمت إضافة المقطع الرائج لقائمتك بنجاح!" else "Clip added successfully", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold, contentColor = ScreenBg)
                 ) {
-                    Text(if (isArabic) "حفظ المقرأ" else "Save Clip")
+                    Text(
+                        if (isYoutubeUrl) {
+                            if (isArabic) "البحث و حفظ البيانات ✨" else "Search & Save ✨"
+                        } else {
+                            if (isArabic) "حفظ المقرأ" else "Save Clip"
+                        }
+                    )
                 }
             },
             dismissButton = {
