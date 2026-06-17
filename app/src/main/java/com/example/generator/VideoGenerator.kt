@@ -1168,35 +1168,43 @@ class VideoGenerator {
     }
 
     private fun downloadAudio(url: String, destFile: File) {
-        if (destFile.exists() && destFile.length() > 0) return
-        val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Android VideoGenerator")
-            .build()
-        var retries = 0
-        var lastErrorUrlCode = 0
-        while (retries < 3) {
-            try {
-                val response = client.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    retries++
-                    lastErrorUrlCode = response.code
-                    Thread.sleep(3000)
-                    continue
-                }
-                response.body?.byteStream()?.use { input ->
-                    destFile.outputStream().use { output ->
-                        input.copyTo(output)
+        synchronized(destFile.absolutePath.intern()) {
+            if (destFile.exists() && destFile.length() > 0) return
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Android VideoGenerator")
+                .build()
+            var retries = 0
+            var lastErrorUrlCode = 0
+            while (retries < 3) {
+                val tmpFile = File(destFile.absolutePath + ".tmp_${System.currentTimeMillis()}")
+                try {
+                    val response = client.newCall(request).execute()
+                    if (!response.isSuccessful) {
+                        retries++
+                        lastErrorUrlCode = response.code
+                        Thread.sleep(3000)
+                        continue
                     }
+                    response.body?.byteStream()?.use { input ->
+                        tmpFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    if (tmpFile.exists() && tmpFile.length() > 0) {
+                        tmpFile.renameTo(destFile)
+                        return
+                    }
+                } catch (e: Exception) {
+                    retries++
+                    if (retries >= 3) throw Exception("فشل تحميل الملفات من الخادم بعد ٣ محاولات لـ $url: ${e.message}")
+                    Thread.sleep(3000)
+                } finally {
+                    if (tmpFile.exists()) tmpFile.delete()
                 }
-                return
-            } catch (e: Exception) {
-                retries++
-                if (retries >= 3) throw Exception("فشل تحميل الملفات من الخادم بعد ٣ محاولات لـ $url: ${e.message}")
-                Thread.sleep(3000)
             }
+            throw Exception("الرابط غير متاح أو لا يمكن الوصول إليه. رمز الخطأ الأخير: $lastErrorUrlCode لـ $url")
         }
-        throw Exception("الرابط غير متاح أو لا يمكن الوصول إليه. رمز الخطأ الأخير: $lastErrorUrlCode لـ $url")
     }
 
     private fun checkCancellationAndPause() {

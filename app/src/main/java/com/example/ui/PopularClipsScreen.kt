@@ -183,7 +183,7 @@ fun PopularClipsScreen(
                 surah = 17,
                 ayahStart = 9,
                 ayahEnd = 11,
-                audioUrl = "https://server14.mp3quran.net/islam/017.mp3",
+                audioUrl = "https://server14.mp3quran.net/islam/Rewayat-Hafs-A-n-Assem/017.mp3",
                 category = "طمأنينة",
                 videoQuery = "reading+quran+man"
             ),
@@ -194,7 +194,7 @@ fun PopularClipsScreen(
                 surah = 18,
                 ayahStart = 46,
                 ayahEnd = 49,
-                audioUrl = "https://server14.mp3quran.net/islam/018.mp3",
+                audioUrl = "https://server14.mp3quran.net/islam/Rewayat-Hafs-A-n-Assem/018.mp3",
                 category = "سكينة",
                 videoQuery = "nature+waterfall+mountains"
             ),
