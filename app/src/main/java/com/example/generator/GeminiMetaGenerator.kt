@@ -25,6 +25,13 @@ data class GeneratedMetaResult(
     val youtube: PlatformMeta?
 )
 
+data class ClipAnalysisResult(
+    val surah: Int,
+    val startAyah: Int,
+    val endAyah: Int,
+    val reciterName: String
+)
+
 class GeminiMetaGenerator {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
@@ -37,6 +44,96 @@ class GeminiMetaGenerator {
             chain.proceed(request)
         }
         .build()
+
+    suspend fun analyzeClipUrl(context: Context, url: String): ClipAnalysisResult? = withContext(Dispatchers.IO) {
+        val settingsManager = SettingsManager(context)
+        var apiKey = settingsManager.geminiApiKey.first()
+        
+        if (apiKey.isBlank()) {
+            apiKey = com.example.BuildConfig.GEMINI_API_KEY
+        }
+        
+        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+            return@withContext null
+        }
+
+        val prompt = """
+            You are an expert Islamic AI assistant. I have a video link: $url
+            Please identify the Quranic recitation in this video to the best of your ability.
+            Identify the Surah number, start Ayah number, end Ayah number, and the Reciter's name.
+            If you are not 100% sure, make your best guess based on standard recitations and short clips.
+            
+            Return ONLY a valid JSON object with the following keys and EXACTLY these types (integer for surah/ayah, string for reciter):
+            {
+                "surahNumber": 1,
+                "startAyah": 1,
+                "endAyah": 7,
+                "reciterName": "Mishary Alafasy"
+            }
+            Do not include any other text, markdown, or explanation.
+        """.trimIndent()
+
+        val jsonRequest = JSONObject().apply {
+            val countArray = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("parts", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("text", prompt)
+                        })
+                    })
+                })
+            }
+            put("contents", countArray)
+            put("generationConfig", JSONObject().apply {
+                put("responseMimeType", "application/json")
+                put("temperature", 0.2)
+            })
+        }
+
+        val requestBody = jsonRequest.toString().toRequestBody("application/json".toMediaType())
+        val apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+        
+        val request = Request.Builder()
+            .url(apiUrl)
+            .post(requestBody)
+            .build()
+            
+        try {
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                val responseStr = response.body?.string() ?: ""
+                val rootJson = JSONObject(responseStr)
+                val candidates = rootJson.getJSONArray("candidates")
+                if (candidates.length() > 0) {
+                    val candidate = candidates.getJSONObject(0)
+                    val contentObj = candidate.getJSONObject("content")
+                    val parts = contentObj.getJSONArray("parts")
+                    if (parts.length() > 0) {
+                        val rawText = parts.getJSONObject(0).getString("text").trim()
+                        
+                        val cleanText = if (rawText.startsWith("```json")) {
+                            rawText.substringAfter("```json").substringBeforeLast("```").trim()
+                        } else if (rawText.startsWith("```")) {
+                            rawText.substringAfter("```").substringBeforeLast("```").trim()
+                        } else {
+                            rawText
+                        }
+                        
+                        val metaJson = JSONObject(cleanText)
+                        return@withContext ClipAnalysisResult(
+                            surah = metaJson.optInt("surahNumber", 1),
+                            startAyah = metaJson.optInt("startAyah", 1),
+                            endAyah = metaJson.optInt("endAyah", 1),
+                            reciterName = metaJson.optString("reciterName", "Unknown")
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return@withContext null
+    }
 
     suspend fun generateSocialMeta(
         context: Context,

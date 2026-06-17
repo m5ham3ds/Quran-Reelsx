@@ -1082,10 +1082,42 @@ fun PopularClipsScreen(
                             colors = CheckboxDefaults.colors(checkedColor = LuxuryGold)
                         )
                         Text(
-                            text = if (isArabic) "وهل الرابط عبر Youtube أو منصة أخرى(YT-DLP)؟" else "Is it a YouTube/other platform link (YT-DLP)?",
+                            text = if (isArabic) "رابط منصة تواصل (يوتيوب وغيرها)؟" else "Social Platform Link (YouTube)?",
                             color = TextSoftColor,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            modifier = Modifier.weight(1f)
                         )
+                    }
+
+                    if (isYoutubeUrl && addUrl.isNotBlank()) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val generator = com.example.generator.GeminiMetaGenerator()
+                                        Toast.makeText(context, if (isArabic) "جاري جلب المعلومات عبر Gemini..." else "Fetching AI info...", Toast.LENGTH_SHORT).show()
+                                        val result = generator.analyzeClipUrl(context, addUrl)
+                                        if (result != null) {
+                                            addSurahStr = result.surah.toString()
+                                            addStartStr = result.startAyah.toString()
+                                            addEndStr = result.endAyah.toString()
+                                            if (result.reciterName.isNotBlank() && result.reciterName != "Unknown") {
+                                                addReciter = result.reciterName
+                                            }
+                                            Toast.makeText(context, if (isArabic) "تم الجلب بنجاح!" else "Successfully fetched info!", Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            Toast.makeText(context, if (isArabic) "فشل في التعرف على المقطع، جرب يدوياً" else "AI failed to recognize, enter manually", Toast.LENGTH_LONG).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = LuxuryGold.copy(alpha = 0.8f)),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Text(if (isArabic) "✨ استخراج المعلومات بـ Gemini (تلقائي)" else "✨ Auto-fill with Gemini AI", color = ScreenBg)
+                        }
                     }
 
                     OutlinedTextField(
